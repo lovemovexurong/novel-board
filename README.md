@@ -24,6 +24,10 @@ desktop/      Windows 桌面版（Electron + electron-builder）
 preview/      实测截图
 ```
 
+## 下载
+
+Windows 安装包见 [Releases](https://github.com/lovemovexurong/novel-board/releases)（`小说看板-<版本>-x64.exe`，per-user 安装，免管理员）。
+
 ## 浏览器版
 
 ```bash
