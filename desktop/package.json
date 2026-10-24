@@ -1,0 +1,65 @@
+{
+  "name": "novel-board",
+  "productName": "小说看板",
+  "version": "1.0.0",
+  "description": "小说结构看板 · 时间树 + 章节写作 + AI 参谋（Windows 桌面版）",
+  "main": "electron/main.cjs",
+  "private": true,
+  "author": "novel-board",
+  "scripts": {
+    "dev:browser": "node app/server.mjs",
+    "dev": "cross-env BOARD_DEV=1 electron .",
+    "start": "electron .",
+    "pack": "electron-builder --win --dir",
+    "build": "electron-builder --win nsis",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "cross-env": "^7.0.3"
+  },
+  "build": {
+    "appId": "com.novelboard.app",
+    "productName": "小说看板",
+    "copyright": "小说看板",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "app/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "小说看板-${version}-x64.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "小说看板",
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "language": "2052",
+      "runAfterFinish": true
+    }
+  }
+}

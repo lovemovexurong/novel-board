@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body{margin:0;background:#fff}canvas{display:block}</style></head>
+<body>
+<video id="v" src="/_shot/ref-stacked.mp4" muted preload="auto"></video>
+<canvas id="c" width="1944" height="1760"></canvas>
+<script>
+const v = document.getElementById('v'), c = document.getElementById('c'), x = c.getContext('2d');
+function draw(){ x.drawImage(v, 0, 0, c.width, c.height); window.__drawn = true; }
+v.addEventListener('seeked', draw);
+window.__seek = t => { window.__drawn = false; v.currentTime = t; };
+v.addEventListener('loadedmetadata', () => { window.__ready = true; window.__seek(8); });
+</script>
+</body></html>
