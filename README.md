@@ -31,7 +31,7 @@
 
 ## 下载
 
-Windows 桌面版安装包见 [Releases](https://github.com/lovemovexurong/novel-board/releases)（`小说看板-<版本>-x64.exe`，per-user 安装，免管理员）。
+Windows 桌面版安装包见 [Releases](https://github.com/lovemovexurong/novel-board/releases)（`NovelBoard-<版本>-x64.exe`，per-user 安装，免管理员）。
 
 ## 本地浏览器版
 

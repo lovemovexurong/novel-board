@@ -43,7 +43,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "小说看板-${version}-x64.${ext}",
+      "artifactName": "NovelBoard-${version}-x64.${ext}",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
