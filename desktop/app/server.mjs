@@ -57,7 +57,49 @@ export function createBoardServer(opts = {}) {
   const STATE_FILE = path.join(DATA_DIR, 'board-state.json');
   const CONFIG_FILE = path.join(DATA_DIR, 'board-config.json');
   const SESSIONS_FILE = path.join(DATA_DIR, 'board-sessions.json');
+  const USAGE_FILE = path.join(DATA_DIR, 'board-usage.json');
   const MAX_BACKUPS = 60;
+
+  /* ---------------- 工作区（按文件夹划分） ---------------- */
+  const WS_DIR = path.join(DATA_DIR, 'workspaces');
+  const WS_STATE = 'board-state.json';
+  const WS_CHAPTERS = 'chapters';
+  const wsDir = (ws) => (ws ? safeJoin(WS_DIR, ws) : DATA_DIR);
+  const wsStateFile = (ws) => path.join(wsDir(ws), WS_STATE);
+  const wsChaptersDir = (ws) => {
+    const base = wsDir(ws);
+    const cfg = readJson(path.join(base, 'board-config.json'), {});
+    return path.join(base, cfg.chaptersRoot || WS_CHAPTERS);
+  };
+  const wsSessionsFile = (ws) => path.join(wsDir(ws), 'board-sessions.json');
+  const validWsId = (ws) => {
+    if (typeof ws !== 'string' || !ws) return false;
+    if (/[\\]/.test(ws)) return false;
+    return ws.split('/').filter(Boolean).every(p => p && p !== '.' && p !== '..' && !/[<>:"|?*]/.test(p));
+  };
+  const wsIdOf = (rel) => String(rel || '').replace(/^\/+/, '').replace(/\/+$/, '');
+  const listSubWs = (ws) => {
+    const base = ws ? wsDir(ws) : WS_DIR;
+    const out = [];
+    let names = []; try { names = fs.readdirSync(base); } catch {}
+    for (const name of names) {
+      if (name.startsWith('.')) continue;
+      if (name === WS_CHAPTERS) continue;
+      const p = path.join(base, name);
+      let st; try { st = fs.statSync(p); } catch { continue; }
+      if (!st.isDirectory()) continue;
+      const id = ws ? (ws + '/' + name) : name;
+      out.push({ id, name, parent: ws, hasState: fs.existsSync(path.join(p, WS_STATE)), children: [] });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    return out;
+  };
+  const wsTree = () => {
+    const root = { id: '', name: '看板（默认）', parent: null, hasState: fs.existsSync(STATE_FILE), children: [] };
+    const walk = (node) => { for (const c of listSubWs(node.id)) { node.children.push(c); walk(c); } };
+    walk(root);
+    return root;
+  };
 
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const ensureBackupDir = () => { try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch {} };
@@ -88,25 +130,73 @@ export function createBoardServer(opts = {}) {
   };
   const aiReady = () => !!(config.ai?.baseUrl && apiKey() && config.ai?.model);
 
-  const ai = { sharedSummary: '', sessions: {} };
-  let aiDirty = false;
+  const aiByWs = {};
+  const aiOf = (ws) => { if (!aiByWs[ws]) aiByWs[ws] = { sharedSummary: '', sessions: {}, dirty: false }; return aiByWs[ws]; };
   const loadSessions = () => {
     const s = readJson(SESSIONS_FILE, null);
-    if (s && typeof s === 'object') { ai.sharedSummary = s.sharedSummary || ''; ai.sessions = s.sessions || {}; }
+    if (s && typeof s === 'object') { const a = aiOf(''); a.sharedSummary = s.sharedSummary || ''; a.sessions = s.sessions || {}; }
+    const loadWs = (dir) => {
+      let names = []; try { names = fs.readdirSync(dir); } catch { return; }
+      for (const name of names) {
+        if (name.startsWith('.')) continue;
+        const p = path.join(dir, name);
+        let st; try { st = fs.statSync(p); } catch { continue; }
+        if (st.isDirectory()) {
+          const id = path.relative(WS_DIR, p).split(path.sep).join('/');
+          const sj = readJson(path.join(p, 'board-sessions.json'), null);
+          if (sj && typeof sj === 'object') { const a = aiOf(id); a.sharedSummary = sj.sharedSummary || ''; a.sessions = sj.sessions || {}; }
+          loadWs(p);
+        }
+      }
+    };
+    if (fs.existsSync(WS_DIR)) loadWs(WS_DIR);
   };
   const saveSessions = () => {
-    try { atomicWrite(SESSIONS_FILE, JSON.stringify(ai, null, 2)); aiDirty = false; }
-    catch (e) { console.error('[sessions]', e.message); }
+    for (const [ws, a] of Object.entries(aiByWs)) {
+      if (!a.dirty) continue;
+      const file = ws ? wsSessionsFile(ws) : SESSIONS_FILE;
+      try { atomicWrite(file, JSON.stringify({ sharedSummary: a.sharedSummary, sessions: a.sessions }, null, 2)); a.dirty = false; }
+      catch (e) { console.error('[sessions]', e.message); }
+    }
   };
   loadSessions();
-  const timer = setInterval(() => { if (aiDirty) saveSessions(); }, 3000);
+  const timer = setInterval(saveSessions, 3000);
   timer.unref?.();
 
-  const chaptersRoot = () => path.resolve(
-    opts.getChaptersRoot ? opts.getChaptersRoot() : path.join(DATA_DIR, 'chapters')
+  /* ---------------- Token 用量 ---------------- */
+  let usage = readJson(USAGE_FILE, { byChapter: {}, daily: {}, total: { prompt: 0, completion: 0, total: 0 } });
+  let usageDirty = false;
+  const todayKey = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  const addUsage = (ws, chapter, u) => {
+    if (!u || typeof u.prompt_tokens !== 'number') return;
+    const p = u.prompt_tokens || 0, c = u.completion_tokens || 0, t = u.total_tokens || (p + c);
+    usage.total.prompt += p; usage.total.completion += c; usage.total.total += t;
+    const dk = todayKey();
+    const d = usage.daily[dk] || (usage.daily[dk] = { prompt: 0, completion: 0, total: 0 });
+    d.prompt += p; d.completion += c; d.total += t;
+    const ck = (ws ? ws + '|' : '') + (chapter || '默认');
+    const cu = usage.byChapter[ck] || (usage.byChapter[ck] = { prompt: 0, completion: 0, total: 0 });
+    cu.prompt += p; cu.completion += c; cu.total += t;
+    usageDirty = true;
+  };
+  const saveUsage = () => {
+    if (!usageDirty) return;
+    try { atomicWrite(USAGE_FILE, JSON.stringify(usage, null, 2)); usageDirty = false; }
+    catch (e) { console.error('[usage]', e.message); }
+  };
+  const usageTimer = setInterval(saveUsage, 3000);
+  usageTimer.unref?.();
+
+  const chaptersRoot = (ws) => path.resolve(
+    opts.getChaptersRoot
+      ? path.join(opts.getChaptersRoot(), ws ? ws.split('/').join(path.sep) : '')
+      : (ws ? wsChaptersDir(ws) : path.join(DATA_DIR, 'chapters'))
   );
 
-  function buildSystemPrompt(chapterFile) {
+  function buildSystemPrompt(chapterFile, ai) {
     return [
       '你是网文创作参谋，与作者围绕某一章展开讨论。',
       '回答用简体中文，简洁、具体、可直接执行，不要空话。',
@@ -116,7 +206,7 @@ export function createBoardServer(opts = {}) {
     ].join('\n');
   }
 
-  async function refreshSharedSummary() {
+  async function refreshSharedSummary(ai) {
     try {
       const cfg = config.ai || {};
       const recent = [];
@@ -136,7 +226,7 @@ export function createBoardServer(opts = {}) {
       });
       const j = await res.json();
       const text = j?.choices?.[0]?.message?.content?.trim();
-      if (text) { ai.sharedSummary = text; aiDirty = true; }
+      if (text) { ai.sharedSummary = text; ai.dirty = true; }
     } catch (e) { console.error('[summary]', e.message); }
   }
 
@@ -157,24 +247,77 @@ export function createBoardServer(opts = {}) {
   });
 
   async function handleApi(req, res, u, q) {
+    const ws = validWsId(q.get('ws') || '') ? wsIdOf(q.get('ws') || '') : '';
+    const stateFile = ws ? wsStateFile(ws) : STATE_FILE;
+
+    /* ---------------- 工作区 ---------------- */
+    if (u === '/api/ws/tree' && req.method === 'GET') return json(res, 200, { tree: wsTree() });
+    if (u === '/api/ws/create' && req.method === 'POST') {
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
+      const parent = validWsId(body.parent || '') ? wsIdOf(body.parent || '') : '';
+      const name = String(body.name || '').trim();
+      if (!name) return json(res, 400, { error: '需要工作区名称' });
+      if (/[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') return json(res, 400, { error: '名称含非法字符' });
+      const id = parent ? parent + '/' + name : name;
+      if (!validWsId(id)) return json(res, 400, { error: '非法路径' });
+      const dir = wsDir(id);
+      if (fs.existsSync(dir)) return json(res, 409, { error: '同名工作区已存在' });
+      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(path.join(dir, WS_CHAPTERS), { recursive: true });
+      atomicWrite(wsStateFile(id), JSON.stringify({ version: 1, nodes: [], connections: [], appearance: null }, null, 2));
+      return json(res, 200, { id, name });
+    }
+    if (u === '/api/ws/delete' && req.method === 'POST') {
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
+      const id = wsIdOf(body.ws || '');
+      if (!id) return json(res, 400, { error: '不能删除默认看板' });
+      if (!validWsId(id)) return json(res, 400, { error: '非法路径' });
+      const dir = wsDir(id);
+      if (!fs.existsSync(dir)) return json(res, 404, { error: '工作区不存在' });
+      const st = wsStateFile(id);
+      if (fs.existsSync(st)) backupFile(st);
+      fs.rmSync(dir, { recursive: true, force: true });
+      delete aiByWs[id];
+      return json(res, 200, { ok: true });
+    }
+    if (u === '/api/ws/rename' && req.method === 'POST') {
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
+      const id = wsIdOf(body.ws || '');
+      if (!id) return json(res, 400, { error: '不能重命名默认看板' });
+      if (!validWsId(id)) return json(res, 400, { error: '非法路径' });
+      const name = String(body.name || '').trim();
+      if (!name || /[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') return json(res, 400, { error: '名称非法' });
+      const dir = wsDir(id);
+      if (!fs.existsSync(dir)) return json(res, 404, { error: '工作区不存在' });
+      const parent = id.includes('/') ? id.slice(0, id.lastIndexOf('/')) : '';
+      const newId = parent ? parent + '/' + name : name;
+      const newDir = wsDir(newId);
+      if (fs.existsSync(newDir)) return json(res, 409, { error: '同名工作区已存在' });
+      fs.renameSync(dir, newDir);
+      if (aiByWs[id]) { aiByWs[newId] = aiByWs[id]; delete aiByWs[id]; }
+      return json(res, 200, { id: newId, name });
+    }
+
+    /* ---------------- 看板状态 ---------------- */
     if (u === '/api/state' && req.method === 'GET') {
-      const text = fs.existsSync(STATE_FILE)
-        ? fs.readFileSync(STATE_FILE, 'utf8')
+      const text = fs.existsSync(stateFile)
+        ? fs.readFileSync(stateFile, 'utf8')
         : JSON.stringify({ version: 1, nodes: [], connections: [], appearance: null });
       return json(res, 200, { state: JSON.parse(text), hash: sha1(text) });
     }
     if (u === '/api/state' && req.method === 'PUT') {
       let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
       const text = JSON.stringify(body.state ?? {}, null, 2);
-      const cur = fs.existsSync(STATE_FILE) ? sha1(fs.readFileSync(STATE_FILE, 'utf8')) : null;
+      const cur = fs.existsSync(stateFile) ? sha1(fs.readFileSync(stateFile, 'utf8')) : null;
       if (body.baseHash && cur && body.baseHash !== cur) return json(res, 409, { error: 'conflict', hash: cur });
-      backupFile(STATE_FILE);
-      atomicWrite(STATE_FILE, text);
+      backupFile(stateFile);
+      atomicWrite(stateFile, text);
       return json(res, 200, { hash: sha1(text) });
     }
 
+    /* ---------------- 章节文件 ---------------- */
     if (u === '/api/files' && req.method === 'GET') {
-      const dir = chaptersRoot();
+      const dir = chaptersRoot(ws);
       if (!fs.existsSync(dir)) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
       const out = [];
       for (const name of fs.readdirSync(dir)) {
@@ -186,14 +329,14 @@ export function createBoardServer(opts = {}) {
       return json(res, 200, { root: dir, files: out });
     }
     if (u === '/api/file' && req.method === 'GET') {
-      const p = safeJoin(chaptersRoot(), q.get('p') || '');
+      const p = safeJoin(chaptersRoot(ws), q.get('p') || '');
       if (!p || !fs.existsSync(p) || !fs.statSync(p).isFile()) return json(res, 404, { error: 'not found' });
       const text = fs.readFileSync(p, 'utf8');
       return json(res, 200, { content: text, hash: sha1(text), mtime: fs.statSync(p).mtimeMs });
     }
     if (u === '/api/file' && req.method === 'PUT') {
       let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
-      const p = safeJoin(chaptersRoot(), body.p || '');
+      const p = safeJoin(chaptersRoot(ws), body.p || '');
       if (!p) return json(res, 403, { error: 'bad path' });
       const content = String(body.content ?? '');
       if (fs.existsSync(p)) {
@@ -210,7 +353,7 @@ export function createBoardServer(opts = {}) {
       if (!name) return json(res, 400, { error: '需要文件名' });
       if (!/\.(md|txt)$/i.test(name)) name += '.md';
       if (/[\\/:*?"<>|]/.test(name)) return json(res, 400, { error: '文件名含非法字符' });
-      const p = safeJoin(chaptersRoot(), name);
+      const p = safeJoin(chaptersRoot(ws), name);
       if (!p) return json(res, 403, { error: 'bad path' });
       if (fs.existsSync(p)) return json(res, 409, { error: '同名文件已存在', name });
       const title = String(body.title || name.replace(/\.(md|txt)$/i, ''));
@@ -221,32 +364,51 @@ export function createBoardServer(opts = {}) {
     }
     if (u === '/api/file/delete' && req.method === 'POST') {
       let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
-      const p = safeJoin(chaptersRoot(), body.p || '');
+      const p = safeJoin(chaptersRoot(ws), body.p || '');
       if (!p || !fs.existsSync(p)) return json(res, 404, { error: 'not found' });
       backupFile(p);
       fs.unlinkSync(p);
       return json(res, 200, { ok: true });
     }
 
+    /* ---------------- AI ---------------- */
     if (u === '/api/ai/status' && req.method === 'GET') {
+      const ai = aiOf(ws);
       return json(res, 200, {
         configured: aiReady(), model: config.ai?.model || '',
         baseUrl: config.ai?.baseUrl || '', sharedSummary: ai.sharedSummary,
       });
     }
+    if (u === '/api/ai/models' && req.method === 'GET') {
+      const c = config.ai || {};
+      if (!(c.baseUrl && apiKey())) return json(res, 200, { models: [], error: '请先填写 Base URL 与 API Key' });
+      try {
+        const res2 = await fetch(c.baseUrl.replace(/\/$/, '') + '/models', {
+          method: 'GET',
+          headers: { Authorization: 'Bearer ' + apiKey() },
+        });
+        const j = await res2.json();
+        const arr = j?.data || j?.models || (Array.isArray(j) ? j : []);
+        const models = arr.map(m => (typeof m === 'string' ? m : m.id || m.name || m.model)).filter(Boolean).sort();
+        return json(res, 200, { models });
+      } catch (e) {
+        return json(res, 200, { models: [], error: '获取模型列表失败：' + e.message });
+      }
+    }
     if (u === '/api/ai/chat' && req.method === 'POST') {
       const cfg = config.ai || {};
-      if (!aiReady()) return json(res, 501, { error: '未配置 AI：请在右侧 AI 面板填写 Base URL / API Key / 模型。' });
+      if (!aiReady()) return json(res, 501, { error: '未配置 AI：请填写 API Key 并选择模型。' });
       let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
       const key = String(body.chapter || '默认');
       const message = String(body.message || '').trim();
       if (!message) return json(res, 400, { error: '消息为空' });
+      const ai = aiOf(ws);
       const s = ai.sessions[key] || (ai.sessions[key] = { messages: [] });
       s.messages.push({ role: 'user', content: message });
       if (s.messages.length > 60) s.messages.splice(0, s.messages.length - 60);
       let chapterExcerpt = '';
       try {
-        const p = safeJoin(chaptersRoot(), key);
+        const p = safeJoin(chaptersRoot(ws), key);
         if (p && fs.existsSync(p)) chapterExcerpt = fs.readFileSync(p, 'utf8').slice(0, 3000);
       } catch {}
       try {
@@ -256,7 +418,7 @@ export function createBoardServer(opts = {}) {
           body: JSON.stringify({
             model: cfg.model,
             messages: [
-              { role: 'system', content: buildSystemPrompt(key) },
+              { role: 'system', content: buildSystemPrompt(key, ai) },
               ...(chapterExcerpt ? [{ role: 'system', content: '本章正文节选：\n' + chapterExcerpt }] : []),
               ...s.messages,
             ],
@@ -266,24 +428,36 @@ export function createBoardServer(opts = {}) {
         const reply = j?.choices?.[0]?.message?.content;
         if (!reply) return json(res, 502, { error: '上游无返回：' + (j?.error?.message || JSON.stringify(j).slice(0, 200)) });
         s.messages.push({ role: 'assistant', content: reply });
-        aiDirty = true;
-        refreshSharedSummary();
-        return json(res, 200, { reply, sharedSummary: ai.sharedSummary });
+        ai.dirty = true;
+        addUsage(ws, key, j?.usage);
+        refreshSharedSummary(ai);
+        return json(res, 200, { reply, sharedSummary: ai.sharedSummary, usage: j?.usage || null });
       } catch (e) {
         return json(res, 502, { error: '请求上游失败：' + e.message });
       }
     }
     if (u === '/api/ai/clear' && req.method === 'POST') {
       let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
+      const ai = aiOf(ws);
       if (body.all) ai.sessions = {}; else delete ai.sessions[String(body.chapter || '')];
-      aiDirty = true;
+      ai.dirty = true;
       return json(res, 200, { ok: true });
+    }
+    if (u === '/api/ai/usage' && req.method === 'GET') {
+      const chapter = q.get('chapter') || '';
+      const ck = (ws ? ws + '|' : '') + (chapter || '默认');
+      const today = usage.daily[todayKey()] || { prompt: 0, completion: 0, total: 0 };
+      return json(res, 200, {
+        total: usage.total || { prompt: 0, completion: 0, total: 0 },
+        today,
+        chapter: usage.byChapter[ck] || { prompt: 0, completion: 0, total: 0 },
+      });
     }
 
     if (u === '/api/config' && req.method === 'GET') {
       return json(res, 200, {
         dataDir: DATA_DIR,
-        chaptersRoot: chaptersRoot(),
+        chaptersRoot: chaptersRoot(ws),
         aiConfigured: aiReady(),
         ai: { baseUrl: config.ai?.baseUrl || '', model: config.ai?.model || '' },
       });
@@ -365,7 +539,9 @@ export function createBoardServer(opts = {}) {
     },
     close() {
       clearInterval(timer);
-      if (aiDirty) saveSessions();
+      clearInterval(usageTimer);
+      saveSessions();
+      saveUsage();
       return new Promise(r => server.close(() => r()));
     },
   };

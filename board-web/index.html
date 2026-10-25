@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>小说看板 · 网页版（数据保存在本浏览器）</title>
+<style>
+  /* ---------- 主题变量（纯黑白灰，无彩色） ---------- */
+  :root{
+    --bg:#fbfbfb; --panel:#ffffff; --panel2:#f5f5f4; --card:#ffffff;
+    --ink:#1a1a1a; --sub:#757575; --line:#e0e0e0; --line2:#bdbdbd;
+    --accent:#111111; --accent-ink:#ffffff; --accent-soft:#ececec;
+    --danger:#4d4d4d; --ok:#3c3c3c;
+    --shadow:0 1px 2px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.07);
+    --node-w:220px; --node-h:96px; --font-size:13px;
+  }
+  html[data-theme="dark"]{
+    --bg:#000000; --panel:#141414; --panel2:#0d0d0d; --card:#1a1a1a;
+    --ink:#eeeeee; --sub:#9e9e9e; --line:#2b2b2b; --line2:#454545;
+    --accent:#ffffff; --accent-ink:#000000; --accent-soft:#262626;
+    --danger:#9a9a9a; --ok:#b0b0b0;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0; overflow:hidden; background:var(--bg); color:var(--ink);
+       font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       font-size:14px; user-select:none; -webkit-user-select:none}
+
+  /* ---------- 背景（鲨鱼 + 点阵） ---------- */
+  #bg{position:fixed; inset:0; width:100%; height:100%; display:block; pointer-events:none}
+
+  /* ---------- 顶栏 ---------- */
+  #topbar{position:fixed; top:0; left:0; right:0; height:48px; z-index:30;
+          display:flex; align-items:center; gap:8px; padding:0 12px;
+          background:var(--panel); border-bottom:1px solid var(--line)}
+  #brand{font-weight:700; font-size:14.5px; letter-spacing:.02em; margin-right:2px; white-space:nowrap}
+  #brand em{font-style:normal; color:var(--accent)}
+  .tbtn{display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px;
+        border:1px solid var(--line); border-radius:8px; background:var(--panel);
+        color:var(--ink); font-size:13px; cursor:pointer; white-space:nowrap}
+  .tbtn:hover{border-color:var(--accent); color:var(--accent)}
+  .tbtn.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+  .tbtn.warn{color:var(--danger); border-color:var(--danger)}
+  .tbtn.warn.on{background:var(--danger); color:#fff}
+  #saveState{margin-left:auto; font-size:12px; color:var(--sub); white-space:nowrap}
+  #saveState.dirty{color:var(--danger)}
+  #themeBtn{padding:0 10px}
+
+  /* ---------- 模式提示条 ---------- */
+  #modeHint{position:fixed; top:58px; left:50%; transform:translateX(-50%); z-index:30;
+            background:var(--ink); color:var(--bg); font-size:12.5px; padding:7px 16px;
+            border-radius:999px; display:none; box-shadow:var(--shadow)}
+  #modeHint.show{display:block}
+  #modeHint b{font-weight:700}
+
+  /* ---------- 工作区侧栏 ---------- */
+  #wsbar{position:fixed; left:0; top:48px; bottom:0; width:224px; z-index:28; background:var(--panel);
+         border-right:1px solid var(--line); display:flex; flex-direction:column; transform:translateX(0);
+         transition:transform .18s ease}
+  #wsbar.hide{transform:translateX(-100%)}
+  #wsHead{display:flex; align-items:center; gap:6px; padding:10px 12px 8px; border-bottom:1px solid var(--line)}
+  #wsHead .t{font-size:12px; color:var(--sub); flex:1; letter-spacing:.03em}
+  .wsbtn{width:26px; height:26px; border:1px solid var(--line); border-radius:7px; background:var(--panel);
+         color:var(--ink); font-size:14px; cursor:pointer; line-height:1; padding:0}
+  .wsbtn:hover{border-color:var(--accent); color:var(--accent)}
+  #wsTree{flex:1; overflow:auto; padding:6px 6px 10px}
+  .ws-node{display:flex; align-items:center; gap:5px; padding:7px 8px; border-radius:8px; cursor:pointer;
+           font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden}
+  .ws-node:hover{background:var(--accent-soft)}
+  .ws-node.on{background:var(--accent); color:var(--accent-ink)}
+  .ws-node .caret{width:14px; height:14px; flex:none; display:inline-flex; align-items:center; justify-content:center;
+                  font-size:10px; color:var(--sub); transition:transform .15s; border-radius:3px}
+  .ws-node .caret:hover{background:var(--accent-soft)}
+  .ws-node.on .caret{color:var(--accent-ink)}
+  .ws-node .caret.open{transform:rotate(90deg)}
+  .ws-node .caret.leaf{visibility:hidden}
+  .ws-node .wname{flex:1; overflow:hidden; text-overflow:ellipsis}
+  .ws-node .wop{width:18px; height:18px; flex:none; display:none; align-items:center; justify-content:center;
+               font-size:12px; border-radius:5px; color:var(--sub); border:1px solid transparent}
+  .ws-node:hover .wop{display:inline-flex}
+  .ws-node .wop:hover{border-color:var(--accent); color:var(--accent)}
+  .ws-node.on .wop{color:var(--accent-ink)}
+  .ws-node.on .wop:hover{border-color:var(--accent-ink); color:var(--accent-ink)}
+  .ws-children{margin-left:0}
+  .ws-children .ws-node{padding-left:18px}
+
+  /* ---------- 舞台 ---------- */
+  #stage{position:fixed; inset:0; top:48px; z-index:5; touch-action:none; cursor:grab}
+  #stage.with-ws{left:224px}
+  #stage.panning{cursor:grabbing}
+  #stage.placing{cursor:crosshair}
+  #stage.connecting{cursor:crosshair}
+  #world{position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform}
+  #wires{position:absolute; left:0; top:0; width:10px; height:10px; overflow:visible; pointer-events:none}
+  #wires .wire-hit{pointer-events:stroke; cursor:pointer}
+  #nodesLayer{position:absolute; left:0; top:0}
+
+  /* ---------- 章节卡片 ---------- */
+  .node{position:absolute; background:var(--card); border:1.5px solid var(--line2);
+        border-radius:12px; box-shadow:var(--shadow); padding:10px 12px;
+        font-size:var(--font-size); cursor:grab; overflow:hidden}
+  .node:hover{border-color:var(--accent)}
+  .node.sel{border-color:var(--accent); border-width:2px}
+  .node .ntitle{font-weight:700; font-size:calc(var(--font-size) + 2px); line-height:1.25; padding-right:28px;
+                overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .node .nsub{margin-top:5px; color:var(--sub); font-size:calc(var(--font-size) - 1px);
+              display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.35}
+  .node .nfile{position:absolute; left:12px; bottom:7px; font-size:10.5px; color:var(--sub); opacity:.75}
+  .rs{position:absolute; z-index:2}
+  .rs.e{right:-5px; top:18%; bottom:18%; width:10px; cursor:ew-resize}
+  .rs.s{bottom:-5px; left:18%; right:18%; height:10px; cursor:ns-resize}
+  .rs.se{right:-5px; bottom:-5px; width:14px; height:14px; cursor:nwse-resize}
+  /* 四边端口（可任意增加，位置由 --pt 决定） */
+  .portLayer{position:absolute; inset:0; pointer-events:none; z-index:4}
+  .port{position:absolute; width:11px; height:11px; border-radius:50%;
+        background:var(--panel); border:2px solid var(--accent); z-index:4;
+        display:none; cursor:crosshair; pointer-events:auto; transform:translate(-50%,-50%)}
+  .node:hover .port, .node.sel .port, .stage.porting .port{display:block}
+  .port:hover{background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+  .port.port-sel{background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); animation:ppulse 1s ease-in-out infinite}
+  @keyframes ppulse{0%,100%{box-shadow:0 0 0 3px var(--accent-soft)}50%{box-shadow:0 0 0 7px var(--accent-soft)}}
+  .port.n{top:0; left:var(--pt,50%)} .port.s{bottom:0; left:var(--pt,50%)}
+  .port.e{right:0; top:var(--pt,50%)} .port.w{left:0; top:var(--pt,50%)}
+  /* 加端口模式：边缘悬停高亮 */
+  .stage.porting .node{cursor:crosshair}
+  .stage.porting .node::after{content:""; position:absolute; inset:-3px; border:1.5px dashed var(--accent); border-radius:inherit; pointer-events:none}
+  /* 删除模式：卡片悬停标红提示 */
+  .stage.deleting .node{cursor:pointer}
+  .stage.deleting .node::after{content:""; position:absolute; inset:-3px; border:1.5px dashed var(--danger); border-radius:inherit; pointer-events:none}
+  .stage.deleting .node:hover{border-color:var(--danger); background:var(--accent-soft)}
+
+  /* ---------- 线 ---------- */
+  .wire{fill:none; stroke:var(--line2); stroke-width:2}
+  .wire.hot{stroke:var(--accent); stroke-width:2.5}
+  .wire.danger{stroke:var(--danger)}
+  .wire-head{fill:var(--line2)} .wire-head.hot{fill:var(--accent)}
+  .bend{fill:var(--panel); stroke:var(--accent); stroke-width:2; cursor:move; pointer-events:auto}
+  .endpt{fill:var(--accent); cursor:grab; pointer-events:auto}
+  .wire-ghost{fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:6 5}
+  #wires.cutting .wire{stroke:var(--danger)}
+  #wires.cutting .wire-head{fill:var(--danger)}
+  #wires.cutting .wire-hit{cursor:crosshair}
+
+  /* ---------- HUD（缩放） ---------- */
+  #hud{position:fixed; left:14px; bottom:14px; z-index:25; display:flex; align-items:center; gap:6px;
+       background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:5px 8px; box-shadow:var(--shadow)}
+  #hud .hbtn{width:28px; height:28px; border:none; border-radius:7px; background:transparent; color:var(--ink);
+             font-size:15px; cursor:pointer; line-height:1}
+  #hud .hbtn:hover{background:var(--accent-soft); color:var(--accent)}
+  #zoomLabel{font-size:12px; color:var(--sub); min-width:44px; text-align:center; cursor:pointer}
+
+  /* ---------- 悬浮工具箱 ---------- */
+  #toolbox{position:fixed; z-index:45; display:flex; flex-direction:column; gap:4px;
+           background:var(--panel); border:1px solid var(--line); border-radius:12px;
+           padding:6px; box-shadow:var(--shadow); user-select:none}
+  #toolbox .tt-head{display:flex; align-items:center; justify-content:space-between; gap:8px;
+                    cursor:grab; padding:2px 4px 4px; color:var(--sub); font-size:11px}
+  #toolbox .tt-head:active{cursor:grabbing}
+  #toolbox .tt-head .tt-drag{letter-spacing:1px}
+  #toolbox .tt-body{display:flex; flex-direction:column; gap:4px}
+  .ttool{display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border:1px solid transparent;
+         border-radius:9px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer;
+         text-align:left; white-space:nowrap}
+  .ttool:hover{background:var(--accent-soft)}
+  .ttool.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+  .ttool .ic{width:20px; text-align:center; font-size:15px; flex:none}
+  .ttool .lb{flex:1}
+
+  /* ---------- 面板（外观 / 章节） ---------- */
+  .panel{position:fixed; z-index:40; top:58px; right:12px; width:288px; max-height:calc(100% - 76px);
+         overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:14px;
+         box-shadow:var(--shadow); padding:14px 16px; display:none}
+  .panel.show{display:block}
+  .panel h3{margin:2px 0 12px; font-size:14px; display:flex; align-items:center; justify-content:space-between}
+  .panel .x{border:none; background:transparent; color:var(--sub); font-size:16px; cursor:pointer; padding:2px 6px}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0}
+  .row label{font-size:13px; color:var(--ink); flex:none}
+  .row .val{font-size:12px; color:var(--sub); min-width:38px; text-align:right}
+  input[type=range]{flex:1; accent-color:var(--accent); height:22px}
+  select{border:1px solid var(--line); border-radius:7px; background:var(--panel2); color:var(--ink);
+         height:30px; padding:0 8px; font-size:13px}
+  .switch{position:relative; width:38px; height:21px; flex:none; cursor:pointer}
+  .switch input{display:none}
+  .switch i{position:absolute; inset:0; border-radius:999px; background:var(--line2); transition:background .15s}
+  .switch i::after{content:""; position:absolute; top:2.5px; left:3px; width:16px; height:16px; border-radius:50%;
+                   background:#fff; transition:left .15s; box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .switch input:checked + i{background:var(--accent)}
+  .switch input:checked + i::after{left:19px}
+  .divider{height:1px; background:var(--line); margin:13px -16px}
+  .pbtn{display:block; width:100%; margin:8px 0; height:34px; border:1px solid var(--line); border-radius:9px;
+        background:var(--panel2); color:var(--ink); font-size:13px; cursor:pointer}
+  .pbtn:hover{border-color:var(--accent); color:var(--accent)}
+  .pbtn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+  .pbtn.primary:hover{color:var(--accent-ink); filter:brightness(1.06)}
+  /* 章节库 */
+  #fileList{margin:4px 0 0; padding:0; list-style:none}
+  #fileList li{display:flex; align-items:center; gap:8px; padding:8px 6px; border-radius:8px; cursor:pointer; font-size:13px}
+  #fileList li:hover{background:var(--accent-soft)}
+  #fileList .fname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #fileList .ftag{font-size:11px; color:var(--sub); border:1px solid var(--line); border-radius:6px; padding:1.5px 7px; flex:none}
+  #fileList .ftag.placed{color:var(--accent); border-color:var(--accent)}
+  #fileList .empty{color:var(--sub); cursor:default; font-size:12.5px}
+  #fileList .empty:hover{background:transparent}
+
+  /* 导出面板 */
+  #exportPanel{width:320px}
+  #exportHint{font-size:12px; color:var(--sub); margin:0 0 10px; line-height:1.5}
+  #exportList{margin:0; padding:0; list-style:none; max-height:46vh; overflow:auto}
+  #exportList li{display:flex; align-items:center; gap:8px; padding:8px 6px; margin:3px 0;
+                 border:1px solid var(--line); border-radius:8px; background:var(--panel2);
+                 cursor:grab; font-size:13px; user-select:none}
+  #exportList li.dragging{opacity:.45; border-style:dashed}
+  #exportList li.drag-over{border-color:var(--accent)}
+  #exportList .eidx{flex:none; width:22px; text-align:right; color:var(--sub); font-size:11px}
+  #exportList .ename{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #exportList .efile{flex:none; font-size:10.5px; color:var(--sub); opacity:.7; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+  /* ---------- 抽屉 ---------- */
+  #drawer{position:fixed; z-index:50; top:0; right:0; bottom:0; width:min(540px,100%);
+          background:var(--panel); border-left:1px solid var(--line); box-shadow:var(--shadow);
+          transform:translateX(103%); transition:transform .22s ease; display:flex; flex-direction:column}
+  #drawer.show{transform:translateX(0)}
+  #dhead{padding:12px 16px 0}
+  #dtitle{width:100%; border:none; background:transparent; color:var(--ink); font-size:17px; font-weight:700;
+          padding:4px 0; border-bottom:1px dashed transparent; outline:none}
+  #dtitle:focus{border-bottom-color:var(--accent)}
+  #dfile{font-size:11.5px; color:var(--sub); margin-top:2px}
+  #dtabs{display:flex; gap:4px; margin:12px 0 0; border-bottom:1px solid var(--line)}
+  .dtab{border:none; background:transparent; color:var(--sub); font-size:13.5px; padding:8px 14px; cursor:pointer;
+        border-bottom:2px solid transparent; margin-bottom:-1px}
+  .dtab.on{color:var(--accent); border-bottom-color:var(--accent); font-weight:600}
+  #dstatus{margin-left:auto; font-size:12px; color:var(--sub); align-self:center; padding-bottom:6px}
+  #dstatus.dirty{color:var(--danger)} #dstatus.saved{color:var(--ok)}
+  #dresize{position:absolute; left:-3px; top:0; bottom:0; width:7px; cursor:ew-resize; z-index:5}
+  #dresize::after{content:""; position:absolute; left:2px; top:0; bottom:0; width:3px; background:transparent}
+  #dresize:hover::after, #dresize.drag::after{background:var(--accent)}
+  #dbody{flex:1; overflow:hidden; padding:0}
+  /* 分栏：正文 | AI，可拖分界线 */
+  #splitWrap{display:flex; height:100%; width:100%}
+  #paneEdit{position:relative; flex:1 1 auto; min-width:0; display:flex; flex-direction:column; padding:14px 8px 14px 16px; overflow:hidden}
+  #paneAI{position:relative; flex:0 0 46%; min-width:0; max-width:70%; display:flex; flex-direction:column; border-left:1px solid var(--line); overflow:hidden}
+  #splitBar{flex:0 0 6px; cursor:col-resize; background:transparent; position:relative}
+  #splitBar::after{content:""; position:absolute; left:2px; top:0; bottom:0; width:2px; background:var(--line)}
+  #splitBar:hover::after, #splitBar.drag::after{background:var(--accent)}
+  #editor{width:100%; height:100%; min-height:280px; resize:none; border:1px solid var(--line); border-radius:10px;
+          background:var(--panel2); color:var(--ink); padding:14px; font-size:14px; line-height:1.7;
+          font-family:"JetBrains Mono",Consolas,"PingFang SC",monospace; outline:none; user-select:text; -webkit-user-select:text}
+  #editor:focus{border-color:var(--accent)}
+  /* AI 会话 */
+  #aiMsgs{flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding:12px 14px 8px}
+  .msg{max-width:86%; padding:9px 12px; border-radius:12px; font-size:13.5px; line-height:1.6;
+       white-space:pre-wrap; word-break:break-word; user-select:text; -webkit-user-select:text}
+  .msg.me{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:4px}
+  .msg.ai{align-self:flex-start; background:var(--panel2); border:1px solid var(--line); border-bottom-left-radius:4px}
+  .msg.err{align-self:center; color:var(--danger); background:transparent; border:1px dashed var(--danger); font-size:12.5px}
+  #aiCfg{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:12px}
+  #aiCfg p{margin:0 0 10px; font-size:12.5px; color:var(--sub); line-height:1.5}
+  #aiCfg input{width:100%; height:32px; margin:3px 0 9px; border:1px solid var(--line); border-radius:8px;
+               background:var(--panel); color:var(--ink); padding:0 10px; font-size:13px; outline:none}
+  #aiCfg input:focus{border-color:var(--accent)}
+  #aiFoot{border-top:1px solid var(--line); padding:10px 16px; display:flex; gap:8px; align-items:flex-end}
+  #aiInput{flex:1; min-height:38px; max-height:120px; resize:none; border:1px solid var(--line); border-radius:10px;
+           background:var(--panel2); color:var(--ink); padding:9px 12px; font-size:13.5px; line-height:1.45;
+           outline:none; font-family:inherit; user-select:text; -webkit-user-select:text}
+  #aiInput:focus{border-color:var(--accent)}
+  #aiSend{height:38px; padding:0 16px; border:none; border-radius:10px; background:var(--accent); color:var(--accent-ink);
+          font-size:13.5px; cursor:pointer; flex:none}
+  #aiSend:disabled{opacity:.5; cursor:default}
+  #aiClear{position:absolute; top:2px; right:2px}
+  #summaryBox{margin:0 2px 10px; border:1px solid var(--line); border-radius:10px; background:var(--panel2)}
+  #summaryBox summary{padding:8px 12px; font-size:12.5px; color:var(--sub); cursor:pointer; user-select:none}
+  #summaryBox .stext{padding:0 12px 10px; font-size:12.5px; color:var(--ink); white-space:pre-wrap; line-height:1.55; max-height:180px; overflow:auto; user-select:text}
+  #aiWrap{position:relative; flex:1; display:flex; flex-direction:column; overflow:hidden}
+  #aiQuick{display:flex; gap:6px; padding:8px 16px 0; flex-wrap:wrap}
+  #aiQuick button{border:1px solid var(--line); border-radius:999px; background:var(--panel2); color:var(--sub);
+                  font-size:12px; padding:5px 12px; cursor:pointer}
+  #aiQuick button:hover{color:var(--accent); border-color:var(--accent)}
+  /* AI Token 用量 */
+  #usageBar{padding:6px 14px 4px; border-top:1px solid var(--line); font-size:11.5px; color:var(--sub);
+           display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; line-height:1.5}
+  #usageBar b{color:var(--ink); font-weight:600}
+  #usageBar .u-ok{color:var(--ok)}
+  /* AI 简化配置（Key + 获取模型） */
+  #aiCfg .cfg-hint{font-size:12px; color:var(--sub); margin:0 0 4px}
+  #aiCfg .cfg-adv{margin:2px 0 0; font-size:12px; color:var(--sub); cursor:pointer; user-select:none}
+  #aiCfg .cfg-adv:hover{color:var(--accent)}
+  #aiCfg .cfg-adv-body{display:none; margin-top:6px}
+  #aiCfg .cfg-adv-body.show{display:block}
+  #aiCfg select{width:100%; height:32px; margin:3px 0 9px; border:1px solid var(--line); border-radius:8px;
+                 background:var(--panel); color:var(--ink); padding:0 10px; font-size:13px; outline:none}
+  #aiCfg .cfg-row{display:flex; gap:8px}
+  #aiCfg .cfg-row .pbtn{flex:none; width:auto; padding:0 14px; margin:3px 0 9px}
+  #aiCfg .cfg-err{font-size:12px; color:var(--danger); margin:0 0 8px; display:none}
+
+  /* ---------- 弹窗 ---------- */
+  #modal{position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:none;
+         align-items:center; justify-content:center}
+  #modal.show{display:flex}
+  #modalCard{width:min(380px, calc(100% - 32px)); background:var(--panel); border:1px solid var(--line);
+             border-radius:14px; box-shadow:var(--shadow); padding:20px}
+  #modalCard h4{margin:0 0 14px; font-size:15px}
+  #modalCard input{width:100%; height:36px; margin:4px 0 12px; border:1px solid var(--line); border-radius:9px;
+                   background:var(--panel2); color:var(--ink); padding:0 12px; font-size:14px; outline:none}
+  #modalCard input:focus{border-color:var(--accent)}
+  #modalBtns{display:flex; gap:10px; justify-content:flex-end}
+  #modalBtns .pbtn{width:auto; padding:0 18px; margin:0}
+
+  /* ---------- Toast ---------- */
+  #toasts{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:70;
+          display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
+  .toast{background:var(--ink); color:var(--bg); font-size:13px; padding:9px 18px; border-radius:999px;
+         box-shadow:var(--shadow); animation:tin .18s ease}
+  @keyframes tin{from{opacity:0; transform:translateY(8px)} to{opacity:1}}
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width:920px){
+    .tbtn span{display:none}
+    .tbtn{padding:0 10px}
+    #brand{font-size:13px}
+    .panel{left:12px; right:12px; width:auto; top:auto; bottom:12px; max-height:56%}
+    #hud{bottom:12px; left:12px}
+    #saveState{font-size:11px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #drawer{transition:none} .toast{animation:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div id="topbar">
+  <div id="brand">小说<em>看板</em></div>
+  <button class="tbtn" id="wsToggle" title="显示/隐藏工作区树">☰<span>工作区</span></button>
+  <button class="tbtn" id="newBtn" title="新建章节并放到看板上">✚<span>新章节</span></button>
+  <button class="tbtn" id="libBtn" title="章节库：选择文件上板">▤<span>章节</span></button>
+  <button class="tbtn" id="cutBtn" title="断线模式：点连线即断开">✂<span>断线</span></button>
+  <button class="tbtn" id="styleBtn" title="外观设置">◐<span>外观</span></button>
+  <button class="tbtn" id="exportBtn" title="导出整本小说为 txt">⇩<span>导出</span></button>
+  <button class="tbtn" id="themeBtn" title="深浅主题">◑</button>
+  <div id="saveState">—</div>
+</div>
+
+<div id="modeHint"></div>
+
+<!-- 工作区侧栏 -->
+<div id="wsbar" class="hide">
+  <div id="wsHead">
+    <span class="t">工作区</span>
+    <button class="wsbtn" id="wsAdd" title="新建小说工作区">✚</button>
+    <button class="wsbtn" id="wsToggle2" title="收起">◀</button>
+  </div>
+  <div id="wsTree"></div>
+</div>
+
+<!-- 悬浮工具箱 -->
+<div id="toolbox">
+  <div class="tt-head"><span class="tt-drag">⠿ 工具箱</span><span>拖我移动</span></div>
+  <div class="tt-body">
+    <button class="ttool on" data-tool="select"><span class="ic">🖱</span><span class="lb">选择 / 拖拽</span></button>
+    <button class="ttool" data-tool="connect"><span class="ic">⇄</span><span class="lb">连线（拖端口）</span></button>
+    <button class="ttool" data-tool="port"><span class="ic">⊕</span><span class="lb">加连接点</span></button>
+    <button class="ttool" data-tool="cut"><span class="ic">✂</span><span class="lb">删线（点线断开）</span></button>
+    <button class="ttool" data-tool="del"><span class="ic">🗑</span><span class="lb">删除卡片</span></button>
+    <button class="ttool" data-tool="add"><span class="ic">✚</span><span class="lb">新章节</span></button>
+  </div>
+</div>
+
+<div id="stage"><div id="world">
+  <svg id="wires"></svg>
+  <div id="nodesLayer"></div>
+</div></div>
+
+<div id="hud">
+  <button class="hbtn" id="zOut" title="缩小">−</button>
+  <div id="zoomLabel" title="点击复位 100%">100%</div>
+  <button class="hbtn" id="zIn" title="放大">＋</button>
+  <button class="hbtn" id="zFit" title="全部适配">⊡</button>
+</div>
+
+<!-- 外观面板 -->
+<div class="panel" id="stylePanel">
+  <h3>外观 <button class="x" data-close="stylePanel">✕</button></h3>
+  <div class="row"><label>点阵背景</label><label class="switch"><input type="checkbox" id="aDots" checked><i></i></label></div>
+  <div class="row"><label>动态背景</label><label class="switch"><input type="checkbox" id="aShark" checked><i></i></label></div>
+  <div class="row"><label>背景浓度</label><input type="range" id="aSharkA" min="20" max="100" value="100"><div class="val" id="aSharkAv">100%</div></div>
+  <div class="divider"></div>
+  <div class="row"><label>节点宽</label><input type="range" id="aNodeW" min="150" max="340" value="220"><div class="val" id="aNodeWv">220</div></div>
+  <div class="row"><label>节点高</label><input type="range" id="aNodeH" min="70" max="200" value="96"><div class="val" id="aNodeHv">96</div></div>
+  <div class="row"><label>横向间距</label><input type="range" id="aGapX" min="30" max="220" value="80"><div class="val" id="aGapXv">80</div></div>
+  <div class="row"><label>纵向间距</label><input type="range" id="aGapY" min="30" max="200" value="60"><div class="val" id="aGapYv">60</div></div>
+  <div class="row"><label>字号</label><input type="range" id="aFont" min="11" max="18" value="13"><div class="val" id="aFontv">13</div></div>
+  <div class="divider"></div>
+  <button class="pbtn" id="applyAllBtn">按默认尺寸重排全部</button>
+  <button class="pbtn" id="layoutBtn">自动排布（按文件名）</button>
+</div>
+
+<!-- 章节库面板 -->
+<div class="panel" id="libPanel">
+  <h3>章节库 <button class="x" data-close="libPanel">✕</button></h3>
+  <ul id="fileList"></ul>
+  <button class="pbtn" id="refreshLibBtn">刷新</button>
+</div>
+
+<!-- 导出面板 -->
+<div class="panel" id="exportPanel">
+  <h3>导出整本小说 <button class="x" data-close="exportPanel">✕</button></h3>
+  <p id="exportHint">拖拽下方章节调整导出顺序（默认按连线顺序）</p>
+  <ul id="exportList"></ul>
+  <div class="divider"></div>
+  <button class="pbtn" id="exportResetBtn">恢复连线顺序</button>
+  <button class="pbtn primary" id="exportDoBtn">导出为 .txt</button>
+</div>
+
+<!-- 抽屉：正文 / AI -->
+<aside id="drawer">
+  <div id="dresize" title="拖动调整侧栏宽度"></div>
+  <div id="dhead">
+    <input id="dtitle" placeholder="章节标题">
+    <div id="dfile"></div>
+    <div id="dtabs">
+      <span id="dtabHint" style="font-size:12px;color:var(--sub);padding:8px 0">正文 · AI 参谋（可拖中间分隔条调整比例）</span>
+      <div id="dstatus"></div>
+      <button class="dtab" id="dclose" title="关闭 (Esc)">✕</button>
+    </div>
+  </div>
+  <div id="dbody">
+    <div id="splitWrap">
+      <div id="paneEdit"><textarea id="editor" spellcheck="false" placeholder="正文…（Ctrl+S 保存写回原文件）"></textarea></div>
+      <div id="splitBar" title="拖动调整分栏"></div>
+      <div id="paneAI">
+        <div id="aiWrap">
+          <div id="aiMsgs"></div>
+          <div id="aiQuick">
+            <button data-q="请通读本章正文并给出具体点评：哪里写得好、哪里拖节奏、哪里人物动机或逻辑说不通，分点列出，并给出可直接执行的改法。">点评本章</button>
+            <button data-q="针对本章给出 3 到 5 条最重要的修改建议，按优先级排序，并说明为什么这样改。">修改建议</button>
+            <button data-q="基于本章正文和跨章共享摘要，建议接下来两章的剧情走向、冲突升级点与伏笔安排。">后续走向</button>
+          </div>
+          <div id="usageBar" title="Token 用量统计"></div>
+          <div id="aiFoot">
+            <textarea id="aiInput" rows="1" placeholder="问点什么…（Ctrl+Enter 发送）"></textarea>
+            <button id="aiSend">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- 新章节弹窗 -->
+<div id="modal"><div id="modalCard">
+  <h4>新章节</h4>
+  <label style="font-size:12px;color:var(--sub)">标题</label>
+  <input id="mTitle" placeholder="第一章 风起">
+  <label style="font-size:12px;color:var(--sub)">文件名（自动补 .md）</label>
+  <input id="mName" placeholder="chapter-01.md">
+  <div id="modalBtns">
+    <button class="pbtn" id="mCancel">取消</button>
+    <button class="pbtn primary" id="mOk">创建</button>
+  </div>
+</div></div>
+
+<div id="toasts"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* ================================================================ 本地存储层（纯静态版） */
+let currentWs = '';                        // 当前工作区 id（'' = 默认根看板）
+const LS = {
+  get(k, fb){ try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error('ls set', e); } },
+  del(k){ try { localStorage.removeItem(k); } catch {} },
+};
+/* 章节文件：按工作区隔离，{ 文件名: 内容 } */
+const filesKey = ws => 'nb:files:' + (ws || '__root__');
+const getFiles = ws => LS.get(filesKey(ws), {});
+const setFiles = (ws, o) => LS.set(filesKey(ws), o);
+/* 看板状态：每个工作区一份 */
+const stateKey = ws => 'nb:state:' + (ws || '__root__');
+/* 工作区树：[{id, name, parent}] */
+const TREE_KEY = 'nb:wsTree';
+const getTree = () => LS.get(TREE_KEY, []);
+const setTree = t => LS.set(TREE_KEY, t);
+/* AI 配置 + 会话 + 用量 */
+const AICFG_KEY = 'nb:aiConfig';
+const getAiCfg = () => LS.get(AICFG_KEY, null);
+const setAiCfg = c => LS.set(AICFG_KEY, c);
+const SESS_KEY = ws => 'nb:sessions:' + (ws || '__root__');
+const USAGE_KEY = 'nb:usage';
+
+/* 简易 hash（用于状态/文件一致性，纯前端用） */
+function lsHash(s){ let h = 5381; for (let i = 0; i < s.length; i++){ h = ((h << 5) + h + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36); }
+
+/* ---- 模拟原 server 的 API，全部走 localStorage ---- */
+const api = {
+  async get(u){
+    const q = new URL(u, location.origin);
+    const p = q.pathname;
+    if (p === '/api/state'){ return { state: LS.get(stateKey(currentWs), { version: 1, nodes: [], connections: [], appearance: null, viewport: null }), hash: '' }; }
+    if (p === '/api/files'){ const f = getFiles(currentWs); return { root: currentWs, files: Object.keys(f).sort((a,b)=>a.localeCompare(b,'zh')).map(name => ({ name, size: (f[name]||'').length, mtime: 0 })) }; }
+    if (p === '/api/file'){ const f = getFiles(currentWs); const name = q.searchParams.get('p') || ''; const c = f[name] ?? ''; return { content: c, hash: lsHash(c), mtime: 0 }; }
+    if (p === '/api/ws/tree'){ return { tree: buildTree() }; }
+    if (p === '/api/ai/status'){ const c = getAiCfg(); return { configured: !!(c && c.apiKey && c.model), model: c?.model || '', baseUrl: c?.baseUrl || '', sharedSummary: (LS.get(SESS_KEY(currentWs), {}).sharedSummary) || '' }; }
+    if (p === '/api/ai/usage'){ const ch = q.searchParams.get('chapter') || ''; return buildUsage(ch); }
+    if (p === '/api/config'){ return { ai: getAiCfg() || {} }; }
+    throw new Error('unknown api: ' + u);
+  },
+  async send(u, method, body){
+    const p = new URL(u, location.origin).pathname;
+    if (p === '/api/state' && method === 'PUT'){ LS.set(stateKey(currentWs), body.state ?? {}); return { hash: lsHash(JSON.stringify(body.state)) }; }
+    if (p === '/api/file' && method === 'PUT'){ const f = getFiles(currentWs); f[body.p] = body.content ?? ''; setFiles(currentWs, f); return { hash: lsHash(body.content), mtime: 0 }; }
+    if (p === '/api/file/create' && method === 'POST'){ const f = getFiles(currentWs); let name = body.name; if (!/\.(md|txt)$/i.test(name)) name += '.md'; if (f[name] !== undefined) throw { error: '同名文件已存在', name }; f[name] = '# ' + (body.title || name.replace(/\.(md|txt)$/i, '')) + '\n\n'; setFiles(currentWs, f); return { name, hash: '' }; }
+    if (p === '/api/file/delete' && method === 'POST'){ const f = getFiles(currentWs); delete f[body.p]; setFiles(currentWs, f); return { ok: true }; }
+    if (p === '/api/ws/create' && method === 'POST'){ const t = getTree(); const id = (body.parent ? body.parent + '/' : '') + body.name; if (t.find(x => x.id === id)) throw { error: '同名工作区已存在' }; t.push({ id, name: body.name, parent: body.parent || '' }); setTree(t); return { id, name: body.name }; }
+    if (p === '/api/ws/rename' && method === 'POST'){ const t = getTree(); const node = t.find(x => x.id === body.ws); const newId = (node.parent ? node.parent + '/' : '') + body.name; if (t.find(x => x.id === newId && x.id !== body.ws)) throw { error: '同名工作区已存在' }; node.name = body.name; const old = node.id; node.id = newId; /* 迁移子工作区 */ t.forEach(x => { if (x.parent === old) x.parent = newId; else if (x.parent && x.parent.startsWith(old + '/')) x.parent = newId + x.parent.slice(old.length); }); /* 迁移 id */ t.forEach(x => { if (x.id === old) x.id = newId; else if (x.id.startsWith(old + '/')) x.id = newId + x.id.slice(old.length); }); setTree(t); LS.set(stateKey(newId), LS.get(stateKey(old), null)); LS.del(stateKey(old)); LS.set(filesKey(newId), LS.get(filesKey(old), {})); LS.del(filesKey(old)); return { id: newId }; }
+    if (p === '/api/ws/delete' && method === 'POST'){ let t = getTree(); const del = id => { LS.del(stateKey(id)); LS.del(filesKey(id)); }; del(body.ws); t = t.filter(x => !(x.id === body.ws || x.id.startsWith(body.ws + '/'))); setTree(t); return { ok: true }; }
+    if (p === '/api/config' && method === 'PUT'){ setAiCfg(body.ai); return { ok: true }; }
+    if (p === '/api/ai/clear' && method === 'POST'){ const s = LS.get(SESS_KEY(currentWs), { sharedSummary: '', sessions: {} }); if (body.all) s.sessions = {}; else delete s.sessions[body.chapter || '']; LS.set(SESS_KEY(currentWs), s); return { ok: true }; }
+    throw new Error('unknown api: ' + u);
+  },
+};
+function buildTree(){
+  const list = getTree();
+  const root = { id: '', name: '默认看板', parent: null, children: [] };
+  const byParent = {};
+  for (const n of list){ (byParent[n.parent || ''] = byParent[n.parent || ''] || []).push(n); }
+  const walk = node => {
+    node.children = (byParent[node.id] || []).map(c => walk({ ...c, children: [] }));
+    node.children.sort((a,b)=>a.name.localeCompare(b.name,'zh'));
+    return node;
+  };
+  return walk(root);
+}
+/* Token 用量：{ byChapter: {file:{prompt,completion,total}}, daily:{date:{...}}, total:{...} } */
+function getUsage(){ return LS.get(USAGE_KEY, { byChapter: {}, daily: {}, total: { prompt: 0, completion: 0, total: 0 } }); }
+function addUsage(chapter, prompt, completion){
+  const u = getUsage();
+  const c = u.byChapter[chapter] || (u.byChapter[chapter] = { prompt: 0, completion: 0, total: 0 });
+  c.prompt += prompt; c.completion += completion; c.total += prompt + completion;
+  const today = new Date().toISOString().slice(0, 10);
+  const d = u.daily[today] || (u.daily[today] = { prompt: 0, completion: 0, total: 0 });
+  d.prompt += prompt; d.completion += completion; d.total += prompt + completion;
+  u.total.prompt += prompt; u.total.completion += completion; u.total.total += prompt + completion;
+  LS.set(USAGE_KEY, u);
+}
+function buildUsage(chapter){ const u = getUsage(); return { chapter: u.byChapter[chapter] || { prompt:0,completion:0,total:0 }, total: u.total, today: u.daily[new Date().toISOString().slice(0,10)] || { prompt:0,completion:0,total:0 } }; }
+
+/* ================================================================ 全局状态 */
+let state = { version: 1, nodes: [], connections: [], appearance: {}, viewport: null };
+let stateHash = '';
+let view = { x: 0, y: 0, s: 1 };          // 世界变换
+let selNode = null;                        // 选中的节点 id
+let mode = null;                           // null | 'placing' | 'placing-file' | 'cut' | 'del'
+let placingFile = null;                    // 放置模式的文件名
+let saveTimer = null, saveState = $('#saveState');
+const editor = $('#editor'), drawer = $('#drawer');
+
+const APP_DEFAULT = { theme: 'light', dots: true, shark: true, sharkAlpha: 1,
+                      nodeW: 220, nodeH: 96, gapX: 80, gapY: 60, fontSize: 13 };
+let app = { ...APP_DEFAULT };
+
+function toast(msg, ms = 2200){
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+/* ================================================================ 持久化 */
+function setSaveUI(txt, cls){ saveState.textContent = txt; saveState.className = cls || ''; }
+function scheduleSave(){
+  if (window.__noSave) return;               // ?fx 演示模式不落盘
+  setSaveUI('未保存…', 'dirty');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveStateNow, 500);
+}
+async function saveStateNow(){
+  clearTimeout(saveTimer);
+  setSaveUI('保存中…');
+  state.viewport = { ...view };
+  const payload = { state: { ...state, appearance: app }, baseHash: stateHash };
+  try {
+    const r = await api.send('/api/state', 'PUT', payload);
+    stateHash = r.hash;
+    setSaveUI('已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }));
+  } catch (e) {
+    if (e.__status === 409 && e.hash){       // 他处已改：以最新 hash 重试一次（后写覆盖）
+      try {
+        const r2 = await api.send('/api/state', 'PUT', { state: { ...state, appearance: app }, baseHash: e.hash });
+        stateHash = r2.hash;
+        setSaveUI('已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }));
+        toast('检测到他处修改，已按当前内容覆盖');
+        return;
+      } catch {}
+    }
+    setSaveUI('保存失败', 'dirty');
+    toast('保存失败：' + (e.error || '未知错误'));
+  }
+}
+
+/* ================================================================ 外观 */
+function applyAppearance(){
+  const r = document.documentElement;
+  r.dataset.theme = app.theme;
+  r.style.setProperty('--node-w', app.nodeW + 'px');
+  r.style.setProperty('--node-h', app.nodeH + 'px');
+  r.style.setProperty('--font-size', app.fontSize + 'px');
+  const map = { aDots: 'dots', aShark: 'shark', aSharkA: 'sharkAlpha', aNodeW: 'nodeW', aNodeH: 'nodeH', aGapX: 'gapX', aGapY: 'gapY', aFont: 'fontSize' };
+  for (const [id, key] of Object.entries(map)){
+    const el = $('#' + id);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!app[key];
+    else { el.value = app.sharkAlpha === undefined && key === 'sharkAlpha' ? 100 : (key === 'sharkAlpha' ? Math.round(app.sharkAlpha * 100) : app[key]); }
+  }
+  $('#aSharkAv').textContent = Math.round(app.sharkAlpha * 100) + '%';
+  $('#aNodeWv').textContent = app.nodeW; $('#aNodeHv').textContent = app.nodeH;
+  $('#aGapXv').textContent = app.gapX; $('#aGapYv').textContent = app.gapY; $('#aFontv').textContent = app.fontSize;
+  bgPalette();                              // 鲨鱼换配色
+  drawBG(performance.now());
+}
+function bindAppearance(){
+  const slider = (id, key, scaled) => $('#' + id).addEventListener('input', e => {
+    app[key] = scaled ? e.target.value / 100 : +e.target.value;
+    applyAppearance(); scheduleSave();
+  });
+  slider('aSharkA', 'sharkAlpha', true);
+  slider('aNodeW', 'nodeW'); slider('aNodeH', 'nodeH');
+  slider('aGapX', 'gapX'); slider('aGapY', 'gapY'); slider('aFont', 'fontSize');
+  $('#aDots').addEventListener('change', e => { app.dots = e.target.checked; scheduleSave(); drawBG(performance.now()); });
+  $('#aShark').addEventListener('change', e => { app.shark = e.target.checked; scheduleSave(); drawBG(performance.now()); });
+  $('#applyAllBtn').addEventListener('click', () => {
+    for (const n of state.nodes){ n.w = app.nodeW; n.h = app.nodeH; }
+    renderNodes(); scheduleSave(); toast('已应用默认尺寸');
+  });
+  $('#layoutBtn').addEventListener('click', () => { autoLayout(); scheduleSave(); });
+  $('#themeBtn').addEventListener('click', () => { app.theme = app.theme === 'light' ? 'dark' : 'light'; applyAppearance(); scheduleSave(); });
+}
+
+/* ================================================================ 视口 */
+const stage = $('#stage'), world = $('#world');
+function applyView(){
+  world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`;
+  $('#zoomLabel').textContent = Math.round(view.s * 100) + '%';
+  drawBG(performance.now());
+}
+const toWorld = (cx, cy) => {
+  const r = stage.getBoundingClientRect();
+  return { x: (cx - r.left - view.x) / view.s, y: (cy - r.top - view.y) / view.s };
+};
+function zoomAt(cx, cy, factor){
+  const r = stage.getBoundingClientRect();
+  const px = cx - r.left, py = cy - r.top;
+  const ns = clamp(view.s * factor, 0.25, 2.5);
+  view.x = px - (px - view.x) * ns / view.s;
+  view.y = py - (py - view.y) * ns / view.s;
+  view.s = ns; applyView();
+}
+function fitView(){
+  if (!state.nodes.length){ view = { x: 60, y: 60, s: 1 }; return applyView(); }
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for (const n of state.nodes){ x1 = Math.min(x1, n.x); y1 = Math.min(y1, n.y); x2 = Math.max(x2, n.x + n.w); y2 = Math.max(y2, n.y + n.h); }
+  const r = stage.getBoundingClientRect(), pad = 70;
+  const s = clamp(Math.min((r.width - pad * 2) / (x2 - x1), (r.height - pad * 2) / (y2 - y1)), 0.25, 1.4);
+  view = { s, x: (r.width - (x2 - x1) * s) / 2 - x1 * s, y: (r.height - (y2 - y1) * s) / 2 - y1 * s };
+  applyView();
+}
+$('#zIn').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.2); };
+$('#zOut').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.2); };
+$('#zFit').onclick = fitView;
+$('#zoomLabel').onclick = () => { view.s = 1; applyView(); };
+
+/* ================================================================ 鲨鱼背景 + 点阵 */
+const cv = $('#bg'), bx = cv.getContext('2d');
+const COLS = 128, ROWS = 72, PERIOD = 22;
+const CHARS = 'abcdefghijkmnabcdefghijklmnopqrstuvwxyz0123456789+-*/<>[]{}()#%&@$~=:'.split('');
+const hash = (x, y, k) => { let h = (x * 73856093) ^ (y * 19349663) ^ (k * 83492791); h = (h ^ (h >>> 13)) >>> 0; return h; };
+let W = 0, H = 0, cw = 16, ch = 10, dpr = 1, fontPx = 10;
+let PAL = { bg: '#fbfbfb', dot: '#c9c9c9', g1: 'rgba(0,0,0,.05)', g2: 'rgba(0,0,0,.10)', dark: false };
+function bgPalette(){
+  PAL = app.theme === 'dark'
+    ? { bg: '#000000', dot: '#333333', g1: 'rgba(255,255,255,.06)', g2: 'rgba(255,255,255,.12)', dark: true }
+    : { bg: '#fbfbfb', dot: '#c9c9c9', g1: 'rgba(0,0,0,.05)', g2: 'rgba(0,0,0,.10)', dark: false };
+}
+function resizeBG(){
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cw = W / COLS; ch = H / ROWS;
+  fontPx = Math.max(6, Math.min(14, Math.min(cw, ch)));
+  bx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  bx.textAlign = 'center'; bx.textBaseline = 'middle';
+  bx.font = fontPx.toFixed(1) + 'px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+}
+function pathAt(a){
+  const cx = COLS * 0.5 + Math.sin(a * 2) * COLS * 0.035;
+  const cy = ROWS * 0.5 + Math.sin(a * 3 + 1.1) * ROWS * 0.05;
+  const rx = COLS * 0.36 + Math.sin(a * 2 + 0.7) * COLS * 0.03;
+  const ry = ROWS * 0.28 + Math.cos(a * 2 + 0.4) * ROWS * 0.03;
+  const x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
+  const e = 0.001, b = a + e;
+  const cx2 = COLS * 0.5 + Math.sin(b * 2) * COLS * 0.035;
+  const cy2 = ROWS * 0.5 + Math.sin(b * 3 + 1.1) * ROWS * 0.05;
+  const rx2 = COLS * 0.36 + Math.sin(b * 2 + 0.7) * COLS * 0.03;
+  const ry2 = ROWS * 0.28 + Math.cos(b * 2 + 0.4) * ROWS * 0.03;
+  return { x, y, ang: Math.atan2(cy2 + Math.sin(b) * ry2 - y, cx2 + Math.cos(b) * rx2 - x) };
+}
+const LEN = COLS * 0.42, WID = 0.105;
+const FISH = false;                                     // 鱼暂时移除：保留网格 + 环境漂移字符（改回 true 即恢复鲨鱼与拖尾）
+const heat = new Float32Array(COLS * ROWS).fill(-99);   // 每格“最后一次在体内”的时间，驱动消散拖尾
+function halfWidth(u){
+  if (u < -0.54 || u > 0.56) return 0;
+  const s = (u + 0.54) / 1.10;
+  return WID * Math.pow(Math.sin(Math.PI * Math.min(1, s)), 0.55) * (1 - 0.42 * s * s);
+}
+function inTailFin(u, v){
+  const uu = u - 0.50; if (uu < 0 || uu > 0.30) return false;
+  const t = uu / 0.30;
+  const up = 0.16 * Math.sin(t * Math.PI * 0.62) + 0.006, dn = 0.11 * Math.sin(t * Math.PI * 0.78) + 0.004;
+  if (t > 0.42 && Math.abs(v) < 0.022 * (t - 0.42) / 0.58 + 0.004) return false;
+  return (v < 0 && v > -up) || (v > 0 && v < dn);
+}
+function inDorsal(u, v){
+  if (u < -0.20 || u > 0.12) return false;
+  return v < -WID * 0.9 && v > -WID * 0.9 - 0.075 * Math.sin((u + 0.20) / 0.32 * Math.PI);
+}
+function inPectoral(u, v){
+  if (u < -0.20 || u > 0.10) return false;
+  return v > WID * 0.6 && v < WID * 0.6 + 0.075 * Math.sin((u + 0.20) / 0.30 * Math.PI);
+}
+function silhouette(u, v){
+  const hw = halfWidth(u);
+  if (hw > 0){ const d = hw - Math.abs(v); if (d > 0) return d / hw; }
+  if (inTailFin(u, v)) return 0.35;
+  if (inDorsal(u, v)) return 0.4;
+  if (inPectoral(u, v)) return 0.38;
+  return -1;
+}
+/* 参考片同款渲染：细密方格纸网格 + 灰阶瓷砖块鲨鱼（深块白字、浅块灰字），无标题无输入框 */
+function drawBG(nowMs){
+  bx.clearRect(0, 0, W, H);
+  /* 点阵：跟随世界变换（外观面板开关） */
+  if (app.dots){
+    const step = 28 * view.s;
+    if (step > 9){
+      const ox = ((view.x % step) + step) % step, oy = ((view.y % step) + step) % step;
+      bx.fillStyle = PAL.dot;
+      for (let x = ox; x < W; x += step)
+        for (let y = oy; y < H; y += step)
+          bx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+    }
+  }
+  if (!app.shark) return;
+  const t = nowMs / 1000;
+  /* 方格纸网格：跟随看板平移与缩放，每 5 格一条主线 */
+  const gs = Math.max(10, 18 * view.s);
+  const gx0 = Math.floor(-view.x / gs), gx1 = Math.ceil((W - view.x) / gs);
+  const gy0 = Math.floor(-view.y / gs), gy1 = Math.ceil((H - view.y) / gs);
+  bx.lineWidth = 1;
+  for (const major of [false, true]){
+    bx.beginPath();
+    bx.strokeStyle = major ? PAL.g2 : PAL.g1;
+    for (let i = gx0; i <= gx1; i++){
+      if ((i % 5 === 0) !== major) continue;
+      const x = view.x + i * gs;
+      bx.moveTo(x, 0); bx.lineTo(x, H);
+    }
+    for (let j = gy0; j <= gy1; j++){
+      if ((j % 5 === 0) !== major) continue;
+      const y = view.y + j * gs;
+      bx.moveTo(0, y); bx.lineTo(W, y);
+    }
+    bx.stroke();
+  }
+  /* 鲨鱼 + 消散拖尾 + 满屏漂移字符（参考片同款三层氛围） */
+  const a = (t / PERIOD) * Math.PI * 2;
+  const p = FISH ? pathAt(a) : { x: -1e9, y: -1e9, ang: 0 };
+  const ca = Math.cos(p.ang), sa = Math.sin(p.ang);
+  bx.font = (Math.max(6, Math.min(cw, ch) * 0.72)).toFixed(1) + 'px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const phase = t * 3.4, A = app.sharkAlpha;
+  const dark = PAL.dark;
+  const TRAIL = 2.2;                                    // 拖尾消散时长（秒）
+  /* 环境小黑点/字符跟随看板拖动：按世界偏移回绕到屏幕内 */
+  const wrapW = W + cw, wrapH = H + ch;
+  const wrap = (v, m) => ((v % m) + m) % m;
+  for (let gy = 0; gy < ROWS; gy++){
+    for (let gx = 0; gx < COLS; gx++){
+      const idx = gy * COLS + gx;
+      const cx0 = gx * cw + cw / 2, cy0 = gy * ch + ch / 2;
+      let dens = -1;
+      if (FISH){
+        const dx = gx + 0.5 - p.x, dy = gy + 0.5 - p.y;
+        const u = (dx * ca + dy * sa) / LEN;
+        const v0 = (-dx * sa + dy * ca) / LEN;
+        const und = 0.05 * Math.max(0, u + 0.2) * Math.sin(u * 7.5 - phase);
+        dens = silhouette(u, v0 - und);
+      }
+      if (dens < 0){
+        const age = t - heat[idx];
+        if (age < TRAIL){
+          /* ② 消散拖尾：刚离开的格子先碎成字符，逐渐稀疏、变淡、上浮 */
+          if (hash(gx, gy, Math.floor(age * 7)) % 4 !== 0){
+            const fade = 1 - age / TRAIL;
+            const h2 = hash(gx, gy, 21);
+            bx.globalAlpha = fade * 0.42 * A;
+            if (h2 % 5 === 0){                          // 一部分碎成更小的点
+              bx.fillStyle = dark ? '#888' : '#888';
+              bx.fillRect(cx0 - 0.8, cy0 - age * ch * 0.55 - 0.8, 1.6, 1.6);
+            } else {
+              bx.fillStyle = dark ? '#b0b0b0' : '#6a6a6a';
+              bx.fillText(CHARS[h2 % CHARS.length], cx0 + Math.sin(age * 2 + gx) * 1.5, cy0 - age * ch * 0.55);
+            }
+          }
+          continue;
+        }
+        /* ③ 环境层：满屏零星字符，缓慢漂移、闪烁；位置随看板拖动 */
+        const h = hash(gx, gy, 7);
+        if (h % 251 < 7){
+          bx.globalAlpha = (0.07 + 0.06 * Math.sin(t * 0.7 + (h % 100) / 16)) * A;
+          bx.fillStyle = dark ? '#e0e0e0' : '#555';
+          const drift = (h % 3 - 1);                    // -1/0/1 三种漂移方向
+          bx.fillText(CHARS[h % CHARS.length],
+            wrap(cx0 + view.x + Math.sin(t * 0.22 + (h % 40)) * 2.2 * drift, wrapW),
+            wrap(cy0 + view.y + Math.cos(t * 0.17 + (h % 31)) * 1.6, wrapH));
+        } else if (h % 997 < 3){                        // 更稀疏的小点
+          bx.globalAlpha = (0.06 + 0.04 * Math.sin(t * 0.9 + h % 50)) * A;
+          bx.fillStyle = dark ? '#888' : '#999';
+          bx.fillRect(wrap(cx0 + view.x + Math.sin(t * 0.3 + h % 70) * 2, wrapW), wrap(cy0 + view.y, wrapH), 1.4, 1.4);
+        }
+        continue;
+      }
+      heat[idx] = t;
+      /* ① 本体：灰阶瓷砖块，中心深边缘浅，深块白字浅块灰字，偶有彩色点缀 */
+      const flow = 0.80 + 0.20 * Math.sin(u * 9.0 - phase * 1.15 + v0 * 4.0);
+      const d = Math.min(1, (0.42 + 0.58 * dens) * flow);
+      const jitter = (hash(gx, gy, 5) % 17) - 8;        // 每格轻微明暗抖动，像瓷砖
+      const shade = Math.round((dark ? 52 + d * 190 : 242 - d * 200) + jitter);
+      bx.globalAlpha = 0.96 * A;
+      bx.fillStyle = `rgb(${shade},${shade},${shade})`;
+      bx.fillRect(gx * cw + cw * 0.04, gy * ch + ch * 0.04, cw * 0.92, ch * 0.92);
+      const ci = hash(gx, gy, Math.floor(t * 6));
+      /* 块内字符反色（黑白灰） */
+      bx.fillStyle = dark ? (shade > 150 ? '#141414' : '#e0e0e0') : (shade < 128 ? '#f4f4f4' : '#3a3a3a');
+      bx.globalAlpha = 0.85 * A;
+      bx.fillText(CHARS[ci % CHARS.length], cx0, cy0);
+    }
+  }
+  bx.globalAlpha = 1;
+}
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function bgLoop(now){ requestAnimationFrame(bgLoop); if (!document.hidden && !reducedMotion) drawBG(now); }
+
+/* ================================================================ 节点 */
+const nodesLayer = $('#nodesLayer');
+const SIDE_N = { nx: 0, ny: -1 }, SIDE_E = { nx: 1, ny: 0 }, SIDE_S = { nx: 0, ny: 1 }, SIDE_W = { nx: -1, ny: 0 };
+const SIDES = { n: SIDE_N, e: SIDE_E, s: SIDE_S, w: SIDE_W };
+const SIDE_ORDER = ['n', 'e', 's', 'w'];
+function sidePoint(n, side, t = 0.5){
+  t = clamp(t, 0, 1);
+  if (side === 'n') return { x: n.x + n.w * t, y: n.y, nx: 0, ny: -1 };
+  if (side === 's') return { x: n.x + n.w * t, y: n.y + n.h, nx: 0, ny: 1 };
+  if (side === 'e') return { x: n.x + n.w, y: n.y + n.h * t, nx: 1, ny: 0 };
+  return { x: n.x, y: n.y + n.h * t, nx: -1, ny: 0 };
+}
+const nodeById = id => state.nodes.find(n => n.id === id);
+/* ---- 端口模型：每节点一组端口 { id, side, t }，连线锚定到 portId ---- */
+function ensurePorts(n){
+  if (!Array.isArray(n.ports)) n.ports = [];
+  if (n.ports.length === 0){
+    // 首次打开老数据：给四边中点各补一个默认端口
+    n.ports = [
+      { id: uid('p'), side: 'n', t: 0.5 },
+      { id: uid('p'), side: 'e', t: 0.5 },
+      { id: uid('p'), side: 's', t: 0.5 },
+      { id: uid('p'), side: 'w', t: 0.5 },
+    ];
+  }
+  return n.ports;
+}
+function portById(n, pid){ return (n.ports || []).find(p => p.id === pid); }
+function portPoint(n, pid){
+  const p = portById(n, pid);
+  return p ? sidePoint(n, p.side, p.t) : null;
+}
+/* 把连线端点 {node,side,t} 迁移为 {node,portId}：按最接近的端口匹配 */
+function migrateConnectionEndpoints(){
+  for (const c of state.connections){
+    for (const key of ['from', 'to']){
+      const e = c[key];
+      if (!e) continue;
+      if (e.portId){ const n = nodeById(e.node); if (n && portById(n, e.portId)) continue; }
+      const n = nodeById(e.node);
+      if (!n){ continue; }
+      ensurePorts(n);
+      // 找同 side 且 t 最接近的端口
+      let best = n.ports[0], bd = 1e9;
+      for (const p of n.ports){
+        const d = p.side === e.side ? Math.abs(p.t - (e.t ?? 0.5)) : 1;
+        if (d < bd){ bd = d; best = p; }
+      }
+      e.portId = best.id;
+      // 若边上尚无端口且偏离中点明显，则新建一个专属端口，保证连线锚定精确
+      if (bd > 0.08){
+        const np = { id: uid('p'), side: e.side, t: clamp(e.t ?? 0.5, 0.02, 0.98) };
+        n.ports.push(np); e.portId = np.id;
+      }
+      delete e.side; delete e.t;
+    }
+  }
+}
+
+function renderNodes(){
+  nodesLayer.textContent = '';
+  for (const n of state.nodes){
+    ensurePorts(n);
+    const el = document.createElement('div');
+    el.className = 'node' + (selNode === n.id ? ' sel' : '');
+    el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+    el.style.width = n.w + 'px'; el.style.height = n.h + 'px';
+    el.dataset.id = n.id;
+    el.innerHTML = `<div class="ntitle"></div><div class="nsub"></div><div class="nfile"></div>
+      <div class="portLayer"></div>
+      <div class="rs e" data-rs="e"></div><div class="rs s" data-rs="s"></div><div class="rs se" data-rs="se"></div>`;
+    el.querySelector('.ntitle').textContent = n.title;
+    el.querySelector('.nsub').textContent = n.sub || '';
+    el.querySelector('.nfile').textContent = n.file;
+    nodesLayer.appendChild(el);
+    renderPorts(n, el.querySelector('.portLayer'));
+  }
+  renderWires();
+}
+/* 渲染某节点的端口（加端口统一走工具箱的「加端口」工具） */
+function renderPorts(n, layer){
+  if (!layer) return;
+  layer.textContent = '';
+  for (const p of n.ports){
+    const dot = document.createElement('div');
+    dot.className = 'port ' + p.side;
+    dot.dataset.portId = p.id;
+    dot.style.setProperty('--pt', (p.t * 100).toFixed(2) + '%');
+    dot.title = '拖出连线 · Alt+拖拽改位置 · 右键删除';
+    layer.appendChild(dot);
+  }
+}
+function updateNodeEl(n){
+  const el = nodesLayer.querySelector(`[data-id="${n.id}"]`);
+  if (!el) return renderNodes();
+  el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+  el.style.width = n.w + 'px'; el.style.height = n.h + 'px';
+  renderWires();
+}
+function selectNode(id){
+  selNode = id;
+  $$('.node').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+}
+
+/* ---- 节点拖拽 / 缩放 / 端口 ---- */
+let drag = null;                            // 统一拖拽上下文
+stage.addEventListener('pointerdown', e => {
+  if (e.button === 2) return;
+  if (e.button === 1){ startPan(e); return; }
+  const nodeEl = e.target.closest('.node');
+  const portEl = e.target.closest('.port');
+  const rsEl = e.target.closest('.rs');
+  if (portEl && nodeEl){
+    const n = nodeById(nodeEl.dataset.id);
+    const pid = portEl.dataset.portId;
+    const p = portById(n, pid);
+    // 右键：删除端口
+    if (e.button === 2){
+      e.preventDefault();
+      if (n.ports.length <= 1){ toast('至少保留一个端口'); return; }
+      // 删除端口时，连带清理挂在它上面的连线
+      state.connections = state.connections.filter(c =>
+        !((c.from.node === n.id && c.from.portId === pid) || (c.to.node === n.id && c.to.portId === pid)));
+      n.ports = n.ports.filter(x => x.id !== pid);
+      renderNodes(); scheduleSave(); toast('已删除端口');
+      return;
+    }
+    // 连线模式下：点击端口选起点/终点（而非拖拽）
+    if (mode === 'connect'){ e.stopPropagation(); connectClickPort(n, pid); return; }
+    // 左键按住：若按 Alt 则为拖端口改位置，否则拖出连线
+    if (e.altKey){
+      startMovePort(n, p, e); return;
+    }
+    startConnect(n.id, pid, e); return;
+  }
+  if (rsEl && nodeEl){
+    const n = nodeById(nodeEl.dataset.id);
+    drag = { kind: 'resize', n, dir: rsEl.dataset.rs, sx: e.clientX, sy: e.clientY, w0: n.w, h0: n.h, moved: false };
+    stage.setPointerCapture(e.pointerId); e.preventDefault(); return;
+  }
+  if (nodeEl){
+    const n = nodeById(nodeEl.dataset.id);
+    // 删除模式：点卡片即删
+    if (mode === 'del'){ e.stopPropagation(); deleteNode(n.id); return; }
+    selectNode(n.id);
+    const p = toWorld(e.clientX, e.clientY);
+    drag = { kind: 'node', n, dx: p.x - n.x, dy: p.y - n.y, sx0: e.clientX, sy0: e.clientY, moved: false };
+    stage.setPointerCapture(e.pointerId); e.preventDefault(); return;
+  }
+  /* 空白处 */
+  if (mode === 'port'){ addPortAtClick(e); return; }   // 加连接点：按坐标找最近卡片边缘
+  if (mode === 'placing' || mode === 'placing-file'){ placeChapterAt(e); return; }
+  selectNode(null);
+  startPan(e);
+});
+stage.addEventListener('dblclick', e => {
+  const nodeEl = e.target.closest('.node');
+  if (nodeEl) openDrawer(nodeEl.dataset.id);
+});
+/* 加连接点：按世界坐标找最近卡片，取距点击最近的边新增端口（边缘外 12px 内也可点） */
+function addPortAtClick(e){
+  const p = toWorld(e.clientX, e.clientY);
+  let best = null, bm = 1e9;
+  for (const n of state.nodes){
+    if (p.x < n.x - 12 || p.x > n.x + n.w + 12 || p.y < n.y - 12 || p.y > n.y + n.h + 12) continue;
+    const dl = p.x - n.x, dr = n.x + n.w - p.x, dt = p.y - n.y, db = n.y + n.h - p.y;
+    const m = Math.min(dl, dr, dt, db);
+    if (m < bm){ bm = m; best = { n, dl, dr, dt, db }; }
+  }
+  if (!best) return;                                  // 点在卡片外 → 交给 Esc/继续
+  if (bm > 60){ toast('请点卡片边缘附近'); return; }   // 点在卡片正中：提示
+  const { n, dl, dr, dt, db } = best;
+  let side, t;
+  if (bm === dt){ side = 'n'; t = (p.x - n.x) / n.w; }
+  else if (bm === db){ side = 's'; t = (p.x - n.x) / n.w; }
+  else if (bm === dl){ side = 'w'; t = (p.y - n.y) / n.h; }
+  else { side = 'e'; t = (p.y - n.y) / n.h; }
+  t = clamp(t, 0.03, 0.97);
+  /* 附近已有端口则不重复加 */
+  for (const q of n.ports){
+    if (q.side === side && Math.abs(q.t - t) < 0.07){ toast('这里已有连接点'); return; }
+  }
+  n.ports.push({ id: uid('p'), side, t });
+  renderNodes(); scheduleSave(); toast('已新增连接点');
+}
+function startPan(e){
+  drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, x0: view.x, y0: view.y };
+  stage.classList.add('panning');
+  stage.setPointerCapture(e.pointerId);
+}
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (drag.kind === 'pan'){
+    view.x = drag.x0 + (e.clientX - drag.sx);
+    view.y = drag.y0 + (e.clientY - drag.sy);
+    applyView(); return;
+  }
+  if (drag.kind === 'node'){
+    const p = toWorld(e.clientX, e.clientY);
+    const nx = Math.round(p.x - drag.dx), ny = Math.round(p.y - drag.dy);
+    /* 位移超过 4px 才算拖动，否则视为点击（松开时打开编辑） */
+    if (Math.abs(e.clientX - drag.sx0) + Math.abs(e.clientY - drag.sy0) > 4){
+      if (nx !== drag.n.x || ny !== drag.n.y){ drag.n.x = nx; drag.n.y = ny; drag.moved = true; updateNodeEl(drag.n); }
+    }
+    return;
+  }
+  if (drag.kind === 'resize'){
+    const dw = (e.clientX - drag.sx) / view.s, dh = (e.clientY - drag.sy) / view.s;
+    if (drag.dir.includes('e')) drag.n.w = clamp(Math.round(drag.w0 + dw), 150, 500);
+    if (drag.dir.includes('s')) drag.n.h = clamp(Math.round(drag.h0 + dh), 64, 400);
+    drag.moved = true; updateNodeEl(drag.n); return;
+  }
+  if (drag.kind === 'connect') moveConnect(e);
+  if (drag.kind === 'endpoint') moveEndpoint(e);
+  if (drag.kind === 'bend') moveBend(e);
+  if (drag.kind === 'port') movePort(e);
+});
+stage.addEventListener('pointerup', e => {
+  if (!drag) return;
+  if (drag.kind === 'node'){
+    if (drag.moved) scheduleSave();
+    else openDrawer(drag.n.id);            // 原地点击（未拖动）= 打开编辑
+  }
+  if (drag.kind === 'resize' && drag.moved) scheduleSave();
+  if (drag.kind === 'connect') endConnect();
+  if (drag.kind === 'endpoint') endEndpoint();
+  if (drag.kind === 'bend'){ if (drag.moved) scheduleSave(); }
+  if (drag.kind === 'port'){ if (drag.moved) scheduleSave(); }
+  stage.classList.remove('panning');
+  drag = null;
+});
+/* 触摸双指缩放 */
+const touches = new Map();
+stage.addEventListener('pointerdown', e => { touches.set(e.pointerId, e); if (touches.size === 2) drag = null; });
+stage.addEventListener('pointermove', e => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, e);
+  if (touches.size === 2){
+    const [a, b] = [...touches.values()];
+    const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (stage._pinchD) zoomAt((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2, d / stage._pinchD);
+    stage._pinchD = d;
+  }
+});
+const clearTouch = e => { touches.delete(e.pointerId); stage._pinchD = null; };
+stage.addEventListener('pointerup', clearTouch); stage.addEventListener('pointercancel', clearTouch);
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+}, { passive: false });
+
+/* ================================================================ 连线 */
+const wiresSvg = $('#wires');
+const NS = 'http://www.w3.org/2000/svg';
+function wireGeometry(c){
+  const a = nodeById(c.from.node), b = nodeById(c.to.node);
+  if (!a || !b) return null;
+  const p1 = c.from.portId ? portPoint(a, c.from.portId) : (c.from.side ? sidePoint(a, c.from.side, c.from.t ?? 0.5) : null);
+  const p2 = c.to.portId ? portPoint(b, c.to.portId) : (c.to.side ? sidePoint(b, c.to.side, c.to.t ?? 0.5) : null);
+  if (!p1 || !p2) return null;
+  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const d = clamp(40 + dist * 0.35, 50, 190);
+  const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+  const len = Math.max(dist, 1);
+  const px = -(p2.y - p1.y) / len, py = (p2.x - p1.x) / len;   // 弦的法向
+  const bend = (c.bend || 0) * dist * 0.6;
+  const c1 = { x: p1.x + p1.nx * d + px * bend * 0.5, y: p1.y + p1.ny * d + py * bend * 0.5 };
+  const c2 = { x: p2.x + p2.nx * d + px * bend * 0.5, y: p2.y + p2.ny * d + py * bend * 0.5 };
+  const mid = { x: 0.125 * p1.x + 0.375 * c1.x + 0.375 * c2.x + 0.125 * p2.x,
+                y: 0.125 * p1.y + 0.375 * c1.y + 0.375 * c2.y + 0.125 * p2.y };
+  return { p1, p2, c1, c2, mid, dist };
+}
+function renderWires(){
+  wiresSvg.textContent = '';
+  for (const c of state.connections){
+    const g = wireGeometry(c); if (!g) continue;
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', `M${g.p1.x},${g.p1.y} C${g.c1.x},${g.c1.y} ${g.c2.x},${g.c2.y} ${g.p2.x},${g.p2.y}`);
+    path.setAttribute('class', 'wire');
+    const hit = document.createElementNS(NS, 'path');
+    hit.setAttribute('d', path.getAttribute('d'));
+    hit.setAttribute('class', 'wire-hit');
+    hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '14'); hit.setAttribute('fill', 'none');
+    hit.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      if (mode === 'cut' || e.altKey){ state.connections = state.connections.filter(x => x.id !== c.id); renderWires(); scheduleSave(); toast('已断开'); }
+    });
+    hit.addEventListener('pointerenter', () => { path.classList.add('hot'); head.classList.add('hot'); });
+    hit.addEventListener('pointerleave', () => { path.classList.remove('hot'); head.classList.remove('hot'); });
+    const head = document.createElementNS(NS, 'circle');
+    head.setAttribute('cx', g.p2.x); head.setAttribute('cy', g.p2.y); head.setAttribute('r', 4);
+    head.setAttribute('class', 'wire-head'); head.setAttribute('pointer-events', 'none');
+    wiresSvg.append(hit, path, head);
+    /* 中点拖弯手柄 */
+    const bd = document.createElementNS(NS, 'circle');
+    bd.setAttribute('cx', g.mid.x); bd.setAttribute('cy', g.mid.y); bd.setAttribute('r', 5.5);
+    bd.setAttribute('class', 'bend');
+    bd.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      drag = { kind: 'bend', c, moved: false };
+      stage.setPointerCapture(e.pointerId);
+    });
+    wiresSvg.appendChild(bd);
+    /* 端点（可拖走改接 / 拖离断开） */
+    for (const endKey of ['from', 'to']){
+      const ep = document.createElementNS(NS, 'circle');
+      const pt = endKey === 'from' ? g.p1 : g.p2;
+      ep.setAttribute('cx', pt.x); ep.setAttribute('cy', pt.y); ep.setAttribute('r', 5);
+      ep.setAttribute('class', 'endpt');
+      ep.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        drag = { kind: 'endpoint', c, endKey, moved: false };
+        stage.setPointerCapture(e.pointerId);
+      });
+      wiresSvg.appendChild(ep);
+    }
+  }
+  /* 拖拽中的连线预览 */
+  if (previewConn && drag && (drag.kind === 'connect' || drag.kind === 'endpoint')){
+    const d = previewConn;
+    const epPoint = key => {
+      const e2 = d.c[key];
+      if (!e2) return { x: d.wx, y: d.wy };
+      const n = nodeById(e2.node);
+      if (!n) return { x: d.wx, y: d.wy };
+      const pt = e2.portId ? portPoint(n, e2.portId) : (e2.side ? sidePoint(n, e2.side, e2.t ?? 0.5) : null);
+      return pt || { x: d.wx, y: d.wy };
+    };
+    const p1 = epPoint('from'), p2 = epPoint('to');
+    if (d.floating) ghostPath(`M${p1.x},${p1.y} L${p2.x},${p2.y}`);
+    else {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const dd = clamp(40 + dist * 0.35, 50, 190);
+      ghostPath(`M${p1.x},${p1.y} C${p1.x + p1.nx * dd},${p1.y + p1.ny * dd} ${p2.x + p2.nx * dd},${p2.y + p2.ny * dd} ${p2.x},${p2.y}`);
+    }
+  }
+  wiresSvg.classList.toggle('cutting', mode === 'cut');
+}
+/* 吸附：找最近的节点端口（而非整条边） */
+function snapToPort(wx, wy, excludeNode){
+  const R = 26;
+  let best = null;
+  for (const n of state.nodes){
+    if (n.id === excludeNode) continue;
+    if (wx < n.x - R || wx > n.x + n.w + R || wy < n.y - R || wy > n.y + n.h + R) continue;
+    for (const p of n.ports){
+      const pt = sidePoint(n, p.side, p.t);
+      const d = Math.hypot(wx - pt.x, wy - pt.y);
+      if (d < R && (!best || d < best.d)) best = { node: n.id, portId: p.id, d };
+    }
+  }
+  return best ? { node: best.node, portId: best.portId } : null;
+}
+let previewConn = null;
+function ghostPath(dstr){
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('class', 'wire-ghost');
+  path.setAttribute('d', dstr);
+  wiresSvg.appendChild(path);
+}
+function startConnect(nodeId, portId, e){
+  const c = { id: uid('c'), from: { node: nodeId, portId }, to: { node: nodeId, portId }, bend: 0 };
+  drag = { kind: 'connect', c };
+  stage.classList.add('connecting');
+  stage.setPointerCapture(e.pointerId);
+  moveConnect(e);
+}
+/* 端口沿边拖动改位置（Alt+拖动端口） */
+function startMovePort(n, p, e){
+  drag = { kind: 'port', n, p, moved: false };
+  stage.setPointerCapture(e.pointerId);
+  e.preventDefault();
+}
+function movePort(e){
+  const d = drag; const pt = toWorld(e.clientX, e.clientY);
+  if (d.p.side === 'n' || d.p.side === 's') d.p.t = clamp((pt.x - d.n.x) / d.n.w, 0.03, 0.97);
+  else d.p.t = clamp((pt.y - d.n.y) / d.n.h, 0.03, 0.97);
+  d.moved = true;
+  const layer = nodesLayer.querySelector(`[data-id="${d.n.id}"] .portLayer`);
+  const dot = layer && layer.querySelector(`[data-port-id="${d.p.id}"]`);
+  if (dot) dot.style.setProperty('--pt', (d.p.t * 100).toFixed(2) + '%');
+  renderWires();
+}
+function moveConnect(e){
+  const d = drag; const p = toWorld(e.clientX, e.clientY);
+  const snap = snapToPort(p.x, p.y, d.c.from.node);
+  d.c.to = snap || { node: '__float__' };
+  d.floating = !snap;
+  d.wx = p.x; d.wy = p.y;
+  previewConn = d;
+  renderWires();
+}
+function endConnect(){
+  const d = previewConn;
+  stage.classList.remove('connecting');
+  if (d && !d.floating && d.c.to.node !== d.c.from.node){
+    state.connections.push(d.c); scheduleSave(); toast('已连接');
+  }
+  previewConn = null; drag = null; renderWires();
+}
+function moveEndpoint(e){
+  const d = drag; const p = toWorld(e.clientX, e.clientY);
+  const otherKey = d.endKey === 'from' ? 'to' : 'from';
+  const otherNode = d.c[otherKey].node;
+  const snap = snapToPort(p.x, p.y, otherNode);
+  d.c[d.endKey] = snap || { node: '__float__' };
+  d.floating = !snap;
+  d.wx = p.x; d.wy = p.y;
+  previewConn = d;
+  renderWires();
+}
+function endEndpoint(){
+  const d = drag;
+  if (d.floating){
+    state.connections = state.connections.filter(x => x.id !== d.c.id);
+    toast('已断开');
+  }
+  previewConn = null; drag = null;
+  scheduleSave(); renderWires();
+}
+function moveBend(e){
+  const d = drag; const g = wireGeometry(d.c); if (!g) return;
+  const p = toWorld(e.clientX, e.clientY);
+  const len = Math.max(g.dist, 1);
+  const px = -(g.p2.y - g.p1.y) / len, py = (g.p2.x - g.p1.x) / len;
+  const off = (p.x - g.mid.x) * px + (p.y - g.mid.y) * py;
+  d.c.bend = clamp(+(off / (g.dist * 0.6)).toFixed(3), -1.5, 1.5);
+  d.moved = true; renderWires();
+}
+
+/* ================================================================ 模式（放置 / 断线 / 连线） */
+const modeHint = $('#modeHint');
+function setMode(m, hintHtml){
+  mode = m;
+  $$('#cutBtn').forEach(b => b.classList.toggle('on', m === 'cut'));
+  stage.classList.toggle('placing', m === 'placing' || m === 'placing-file');
+  stage.classList.toggle('connecting-mode', m === 'connect');
+  stage.classList.toggle('porting', m === 'port');
+  stage.classList.toggle('deleting', m === 'del');
+  syncToolbox();
+  if (m){ modeHint.innerHTML = hintHtml; modeHint.classList.add('show'); }
+  else { modeHint.classList.remove('show'); }
+  renderWires();
+}
+$('#cutBtn').onclick = () => setMode(mode === 'cut' ? null : 'cut', '<b>断线模式</b> · 点击连线断开 · Esc 退出');
+$('#newBtn').onclick = () => {
+  if (mode === 'placing'){ setMode(null); return; }
+  setMode('placing', '<b>新章节</b> · 点击空白处选择放置位置 · Esc 取消');
+};
+$('#styleBtn').onclick = () => openPanel('stylePanel');
+$('#libBtn').onclick = () => { openPanel('libPanel'); loadFiles(); };
+$('#exportBtn').onclick = () => { openPanel('exportPanel'); renderExportList(); };
+$('#exportDoBtn').onclick = doExport;
+$('#exportResetBtn').onclick = () => { delete state.order; renderExportList(); scheduleSave(); toast('已恢复连线顺序'); };
+$$('.x[data-close]').forEach(b => b.onclick = () => $('#' + b.dataset.close).classList.remove('show'));
+function openPanel(id){
+  const p = $('#' + id), was = p.classList.contains('show');
+  $$('.panel').forEach(x => x.classList.remove('show'));
+  if (!was) p.classList.add('show');
+}
+
+/* ================================================================ 悬浮工具箱 */
+const toolbox = $('#toolbox');
+let pendingFrom = null;                      // 连线模式：已选起点 {node,portId}
+function syncToolbox(){
+  $$('#toolbox .ttool').forEach(b => {
+    const t = b.dataset.tool;
+    const on = (t === 'select' && !mode) || (t === 'cut' && mode === 'cut') ||
+               (t === 'connect' && mode === 'connect') || (t === 'port' && mode === 'port') ||
+               (t === 'del' && mode === 'del') ||
+               (t === 'add' && (mode === 'placing' || mode === 'placing-file'));
+    b.classList.toggle('on', on);
+  });
+}
+/* 工具箱拖拽移动 */
+(function(){
+  const head = toolbox.querySelector('.tt-head');
+  let offX = 0, offY = 0, moving = false;
+  head.addEventListener('pointerdown', e => {
+    moving = true;
+    const r = toolbox.getBoundingClientRect();
+    offX = e.clientX - r.left; offY = e.clientY - r.top;
+    head.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  head.addEventListener('pointermove', e => {
+    if (!moving) return;
+    let x = e.clientX - offX, y = e.clientY - offY;
+    x = clamp(x, 0, innerWidth - toolbox.offsetWidth);
+    y = clamp(y, 0, innerHeight - toolbox.offsetHeight);
+    toolbox.style.left = x + 'px'; toolbox.style.top = y + 'px';
+    toolbox.style.right = 'auto'; toolbox.style.bottom = 'auto';
+  });
+  const stop = e => { moving = false; };
+  head.addEventListener('pointerup', stop);
+  head.addEventListener('pointercancel', stop);
+})();
+/* 工具箱按钮 */
+$$('#toolbox .ttool').forEach(b => b.addEventListener('click', () => {
+  const t = b.dataset.tool;
+  pendingFrom = null;
+  if (t === 'select'){ setMode(null); return; }
+  if (t === 'cut'){ setMode(mode === 'cut' ? null : 'cut', '<b>删线</b> · 点击连线断开 · Esc 退出'); return; }
+  if (t === 'del'){ setMode(mode === 'del' ? null : 'del', '<b>删除卡片</b> · 点击卡片删除（可选同时删章节文件）· Esc 退出'); return; }
+  if (t === 'add'){ setMode(mode === 'placing' ? null : 'placing', '<b>新章节</b> · 点击空白处放置 · Esc 取消'); return; }
+  if (t === 'connect'){ setMode(mode === 'connect' ? null : 'connect', '<b>连线</b> · 依次点击两个端口（起点→终点）· Esc 退出'); return; }
+  if (t === 'port'){ setMode(mode === 'port' ? null : 'port', '<b>加连接点</b> · 点击卡片边缘要加点的位置 · Esc 退出'); return; }
+}));
+/* 连线模式：点击端口选择起点/终点 */
+function connectClickPort(n, pid){
+  if (!pendingFrom){
+    pendingFrom = { node: n.id, portId: pid };
+    highlightPort(n.id, pid, true);
+    toast('已选起点，再点一个端口完成连线');
+    return;
+  }
+  if (pendingFrom.node === n.id && pendingFrom.portId === pid){
+    highlightPort(n.id, pid, false); pendingFrom = null; toast('已取消');
+    return;
+  }
+  const c = { id: uid('c'), from: { ...pendingFrom }, to: { node: n.id, portId: pid }, bend: 0 };
+  state.connections.push(c);
+  highlightPort(pendingFrom.node, pendingFrom.portId, false);
+  pendingFrom = null;
+  scheduleSave(); toast('已连接');
+  renderWires();
+}
+function highlightPort(nodeId, pid, on){
+  const layer = nodesLayer.querySelector(`[data-id="${nodeId}"] .portLayer`);
+  const dot = layer && layer.querySelector(`[data-port-id="${pid}"]`);
+  if (dot) dot.classList.toggle('port-sel', on);
+}
+
+/* ================================================================ 工作区树 */
+const wsbar = $('#wsbar'), wsTree = $('#wsTree');
+let wsTreeData = null;                       // 当前工作区树（根节点）
+let wsCollapsed = new Set();                 // 折叠的工作区 id
+function renderWsTree(){
+  wsTree.textContent = '';
+  const walk = (node, depth) => {
+    const row = document.createElement('div');
+    row.className = 'ws-node' + (currentWs === node.id ? ' on' : '');
+    const hasKids = node.children && node.children.length > 0;
+    const collapsed = wsCollapsed.has(node.id);
+    row.innerHTML = `<span class="caret ${hasKids ? (collapsed ? '' : 'open') : 'leaf'}">▶</span>
+      <span class="wname"></span><span class="wop" data-op="add">＋</span>
+      <span class="wop" data-op="rename">✎</span><span class="wop" data-op="del">✕</span>`;
+    row.querySelector('.wname').textContent = node.name;
+    row.querySelector('.wname').title = node.id || '默认看板';
+    row.addEventListener('click', e => {
+      if (e.target.classList.contains('wop')) return;
+      if (e.target.classList.contains('caret') && hasKids){ toggleWsCollapse(node.id); return; }
+      switchWs(node.id);
+    });
+    row.querySelector('[data-op=add]').addEventListener('click', e => { e.stopPropagation(); promptNewWs(node.id); });
+    row.querySelector('[data-op=rename]').addEventListener('click', e => { e.stopPropagation(); promptRenameWs(node.id); });
+    row.querySelector('[data-op=del]').addEventListener('click', e => { e.stopPropagation(); confirmDeleteWs(node.id); });
+    wsTree.appendChild(row);
+    if (hasKids && !collapsed){
+      const kidWrap = document.createElement('div');
+      kidWrap.className = 'ws-children';
+      for (const c of node.children) walk(c, depth + 1);
+      wsTree.appendChild(kidWrap);
+    }
+  };
+  walk(wsTreeData, 0);
+}
+function toggleWsCollapse(id){ wsCollapsed.has(id) ? wsCollapsed.delete(id) : wsCollapsed.add(id); renderWsTree(); }
+async function refreshWsTree(){
+  try { const r = await api.get('/api/ws/tree'); wsTreeData = r.tree; renderWsTree(); }
+  catch (e) { console.error('ws tree', e); }
+}
+/* 切换工作区：重载状态/章节 */
+let switchingWs = false;
+async function switchWs(ws){
+  if (switchingWs) return;
+  if (ws === currentWs){ return; }
+  // 有未保存改动先确认
+  if (curChapter && curChapter.dirty){ if (!confirm('当前章节有未保存修改，切换将丢弃，确定？')) return; }
+  if (saveState.classList.contains('dirty')){ await saveStateNow().catch(() => {}); }
+  switchingWs = true;
+  closeDrawer();
+  currentWs = ws;
+  selNode = null;
+  renderWsTree();
+  try {
+    const r = await api.get('/api/state');
+    stateHash = r.hash;
+    const s = r.state || {};
+    state.nodes = Array.isArray(s.nodes) ? s.nodes : [];
+    state.connections = Array.isArray(s.connections) ? s.connections.filter(c => c.from && c.to) : [];
+    for (const n of state.nodes) ensurePorts(n);
+    migrateConnectionEndpoints();
+    if (s.appearance) app = { ...APP_DEFAULT, ...s.appearance };
+    applyAppearance();
+    renderNodes();
+    if (s.viewport && Number.isFinite(s.viewport.s)) { view = s.viewport; applyView(); }
+    else fitView();
+    toast('已切换到：' + (ws || '默认看板'));
+  } catch (e) {
+    toast('切换失败：' + (e.message || e));
+  } finally {
+    switchingWs = false;
+    if (!state.nodes.length) setTimeout(() => { openPanel('libPanel'); loadFiles(); }, 200);
+  }
+}
+async function promptNewWs(parent){
+  const name = prompt('新工作区名称（作为子工作区挂在「' + (parent || '默认看板') + '」下）：');
+  if (!name || !name.trim()) return;
+  try {
+    const r = await api.send('/api/ws/create', 'POST', { parent, name: name.trim() });
+    await refreshWsTree();
+    toast('已创建工作区「' + r.name + '」');
+  } catch (e) { toast('创建失败：' + (e.error || '')); }
+}
+async function promptRenameWs(id){
+  if (!id){ toast('默认看板不可重命名'); return; }
+  const cur = id.split('/').pop();
+  const name = prompt('重命名工作区「' + cur + '」：', cur);
+  if (!name || !name.trim() || name.trim() === cur) return;
+  try {
+    const r = await api.send('/api/ws/rename', 'POST', { ws: id, name: name.trim() });
+    if (currentWs === id) currentWs = r.id;
+    await refreshWsTree();
+    toast('已重命名');
+  } catch (e) { toast('重命名失败：' + (e.error || '')); }
+}
+async function confirmDeleteWs(id){
+  if (!id){ toast('默认看板不可删除'); return; }
+  const name = id.split('/').pop();
+  if (!confirm('确定删除工作区「' + name + '」？\n其下所有子工作区、章节文件、看板状态都会被永久删除！')) return;
+  try {
+    await api.send('/api/ws/delete', 'POST', { ws: id });
+    if (currentWs === id || currentWs.startsWith(id + '/')) currentWs = '';
+    await refreshWsTree();
+    if (currentWs === '') switchWs('');
+    toast('已删除工作区');
+  } catch (e) { toast('删除失败：' + (e.error || '')); }
+}
+function initWsbar(){
+  $('#wsToggle').onclick = toggleWsbar;
+  $('#wsToggle2').onclick = toggleWsbar;
+  $('#wsAdd').onclick = () => promptNewWs(currentWs);
+  refreshWsTree();
+}
+function toggleWsbar(){
+  wsbar.classList.toggle('hide');
+  stage.classList.toggle('with-ws', !wsbar.classList.contains('hide'));
+  setTimeout(() => { resizeBG(); drawBG(performance.now()); }, 200);
+}
+
+/* ================================================================ 章节库 */
+async function loadFiles(){
+  const ul = $('#fileList');
+  ul.innerHTML = '<li class="empty">读取中…</li>';
+  try {
+    const r = await api.get('/api/files');
+    const placed = new Set(state.nodes.map(n => n.file));
+    ul.textContent = '';
+    if (!r.files.length){
+      ul.innerHTML = '<li class="empty">章节目录还没有 .md / .txt 文件</li>';
+      return;
+    }
+    for (const f of r.files){
+      const li = document.createElement('li');
+      const isPlaced = placed.has(f.name);
+      li.innerHTML = `<div class="fname"></div><div class="ftag ${isPlaced ? 'placed' : ''}">${isPlaced ? '已上板' : '上板'}</div>`;
+      li.querySelector('.fname').textContent = f.name;
+      li.onclick = () => {
+        const node = state.nodes.find(n => n.file === f.name);
+        $$('.panel').forEach(x => x.classList.remove('show'));
+        if (node){ selectNode(node.id); centerOn(node); }
+        else {
+          placingFile = f.name;
+          setMode('placing-file', `<b>${f.name}</b> · 点击空白处放置 · Esc 取消`);
+          $$('.panel').forEach(x => x.classList.remove('show'));
+        }
+      };
+      ul.appendChild(li);
+    }
+  } catch (e) { ul.innerHTML = '<li class="empty">读取失败</li>'; }
+}
+$('#refreshLibBtn').onclick = loadFiles;
+function centerOn(n){
+  const r = stage.getBoundingClientRect();
+  view.x = r.width / 2 - (n.x + n.w / 2) * view.s;
+  view.y = r.height / 2 - (n.y + n.h / 2) * view.s;
+  applyView();
+}
+
+/* ---- 放置章节 ---- */
+let placePoint = null;
+async function placeChapterAt(e){
+  const p = toWorld(e.clientX, e.clientY);
+  placePoint = p;
+  if (mode === 'placing-file'){
+    addNode(placingFile, p);
+    setMode(null); placingFile = null;
+    scheduleSave();
+    toast('已上板');
+    return;
+  }
+  setMode(null);
+  $('#mTitle').value = ''; $('#mName').value = '';
+  $('#modal').classList.add('show');
+  $('#mTitle').focus();
+}
+$('#mTitle').addEventListener('input', e => {
+  $('#mName').value = e.target.value.trim() ? e.target.value.trim().replace(/[\\/:*?"<>|]/g, '') + '.md' : '';
+});
+$('#mCancel').onclick = () => $('#modal').classList.remove('show');
+$('#mOk').onclick = createChapter;
+$('#mName').addEventListener('keydown', e => { if (e.key === 'Enter') createChapter(); });
+async function createChapter(){
+  const title = $('#mTitle').value.trim();
+  let name = $('#mName').value.trim();
+  if (!title || !name) { toast('标题和文件名都要填'); return; }
+  try {
+    await api.send('/api/file/create', 'POST', { name, title });
+    $('#modal').classList.remove('show');
+    addNode(name, placePoint || { x: 100, y: 100 }, title);
+    scheduleSave();
+    toast('已创建 ' + name);
+    loadFiles();
+  } catch (e2) { toast('创建失败：' + (e2.error || '')); }
+}
+function addNode(file, at, title){
+  const n = { id: uid('n'), file, title: title || file.replace(/\.(md|txt)$/i, ''), sub: '',
+              x: Math.round(at.x - app.nodeW / 2), y: Math.round(at.y - app.nodeH / 2), w: app.nodeW, h: app.nodeH };
+  state.nodes.push(n);
+  renderNodes(); selectNode(n.id);
+  return n;
+}
+/* 删除卡片：清理连线，可选删章节文件 */
+async function deleteNode(nodeId, alsoFile){
+  const n = nodeById(nodeId);
+  if (!n) return;
+  if (alsoFile === undefined){
+    alsoFile = confirm('删除卡片「' + n.title + '」时，是否连同章节文件「' + n.file + '」一起删除？\n\n确定 = 连文件一起删；取消 = 只从看板移除卡片，保留文件。');
+  }
+  state.nodes = state.nodes.filter(x => x.id !== nodeId);
+  state.connections = state.connections.filter(c => c.from.node !== nodeId && c.to.node !== nodeId);
+  if (selNode === nodeId) selNode = null;
+  renderNodes(); scheduleSave();
+  if (alsoFile){
+    try { await api.send('/api/file/delete', 'POST', { p: n.file }); toast('已删除卡片与文件'); }
+    catch (e) { toast('卡片已移除，但文件删除失败：' + (e.error || '')); }
+  } else {
+    toast('已删除卡片（保留文件）');
+  }
+}
+function autoLayout(){
+  const sorted = [...state.nodes].sort((a, b) => a.file.localeCompare(b.file, 'zh'));
+  const perRow = Math.max(3, Math.ceil(Math.sqrt(sorted.length) * 1.6));
+  sorted.forEach((n, i) => {
+    const row = Math.floor(i / perRow), col = i % perRow;
+    n.x = 100 + col * (app.nodeW + app.gapX);
+    n.y = 100 + row * (app.nodeH + app.gapY);
+  });
+  renderNodes(); fitView(); toast('已自动排布');
+}
+
+/* ================================================================ 导出整本小说 */
+/* 章节排序：默认按连线流（from→to 拓扑），可手动拖拽覆盖，结果存 state.order */
+function computeWireOrder(){
+  const ids = state.nodes.map(n => n.id);
+  const indeg = {}; const adj = {}; const outdeg = {};
+  ids.forEach(id => { indeg[id] = 0; adj[id] = []; outdeg[id] = 0; });
+  for (const c of state.connections){
+    if (!ids.includes(c.from.node) || !ids.includes(c.to.node)) continue;
+    adj[c.from.node].push(c.to.node);
+    indeg[c.to.node]++; outdeg[c.from.node]++;
+  }
+  const order = [];
+  const q = ids.filter(id => indeg[id] === 0);
+  // 起点按画布位置（先上后下、先左后右）排序，保证多起点时稳定
+  q.sort((a, b) => { const A = nodeById(a), B = nodeById(b); return (A.y - B.y) || (A.x - B.x); });
+  const seen = new Set();
+  while (q.length){
+    const id = q.shift();
+    if (seen.has(id)) continue;
+    seen.add(id); order.push(id);
+    adj[id].sort((a, b) => { const A = nodeById(a), B = nodeById(b); return (A.y - B.y) || (A.x - B.x); });
+    for (const nx of adj[id]){ if (--indeg[nx] === 0) q.push(nx); }
+  }
+  // 环内/剩余节点（拓扑未覆盖的）按文件名序追加到末尾
+  const rest = ids.filter(id => !seen.has(id)).sort((a, b) => nodeById(a).file.localeCompare(nodeById(b).file, 'zh'));
+  return order.concat(rest);
+}
+function getChapterOrder(){
+  // 优先用 state.order（手动排序，仅保留仍存在的节点），否则按连线流
+  const alive = new Set(state.nodes.map(n => n.id));
+  if (Array.isArray(state.order)){
+    const kept = state.order.filter(id => alive.has(id));
+    const missing = state.nodes.filter(n => !kept.includes(n.id)).map(n => n.id);
+    return kept.concat(missing);
+  }
+  return computeWireOrder();
+}
+function renderExportList(){
+  const ul = $('#exportList');
+  const order = getChapterOrder();
+  ul.innerHTML = '';
+  order.forEach((id, i) => {
+    const n = nodeById(id); if (!n) return;
+    const li = document.createElement('li');
+    li.dataset.id = id; li.draggable = true;
+    li.innerHTML = `<span class="eidx">${i + 1}</span><span class="ename"></span><span class="efile"></span>`;
+    li.querySelector('.ename').textContent = n.title || n.file.replace(/\.(md|txt)$/i, '');
+    li.querySelector('.efile').textContent = n.file;
+    ul.appendChild(li);
+  });
+}
+function bindExportDnD(){
+  const ul = $('#exportList');
+  let dragEl = null;
+  ul.addEventListener('dragstart', e => {
+    const li = e.target.closest('li'); if (!li) return;
+    dragEl = li; li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', li.dataset.id); } catch {}
+  });
+  ul.addEventListener('dragend', () => { if (dragEl) dragEl.classList.remove('dragging'); dragEl = null; $$('#exportList li').forEach(x => x.classList.remove('drag-over')); });
+  ul.addEventListener('dragover', e => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const li = e.target.closest('li');
+    $$('#exportList li').forEach(x => x.classList.remove('drag-over'));
+    if (li && li !== dragEl) li.classList.add('drag-over');
+  });
+  ul.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('li');
+    const cur = [...$$('#exportList li')].map(x => x.dataset.id);
+    if (!dragEl || !target || target === dragEl) return;
+    const from = cur.indexOf(dragEl.dataset.id);
+    const to = cur.indexOf(target.dataset.id);
+    if (from < 0 || to < 0) return;
+    cur.splice(from, 1); cur.splice(to, 0, dragEl.dataset.id);
+    state.order = cur;                       // 手动排序持久化到看板状态
+    renderExportList(); scheduleSave();
+  });
+}
+function stripFileTitle(content){
+  // 剥离文件首行 # 标题（若有），并清理首尾空白与多余空行
+  let lines = content.replace(/\r\n?/g, '\n').split('\n');
+  if (lines[0] && /^\s*#\s+/.test(lines[0])) lines.shift();
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines.join('\n').trim() + '\n';
+}
+async function doExport(){
+  const order = getChapterOrder();
+  const nodes = order.map(id => nodeById(id)).filter(Boolean);
+  if (!nodes.length){ toast('当前看板没有章节可导出'); return; }
+  const parts = []; const skipped = [];
+  for (const n of nodes){
+    try {
+      const r = await api.get('/api/file?p=' + encodeURIComponent(n.file));
+      const body = stripFileTitle(String(r.content || ''));
+      if (!body.trim()){ skipped.push(n.title); continue; }
+      parts.push((n.title || n.file.replace(/\.(md|txt)$/i, '')) + '\n\n' + body.trim() + '\n');
+    } catch (e) { skipped.push(n.title + '（读取失败）'); }
+  }
+  if (!parts.length){ toast('没有可导出的正文内容'); return; }
+  const sep = '\n' + '　' + '—'.repeat(20) + '　' + '\n\n';
+  const text = parts.join(sep);
+  const wsName = (currentWs ? currentWs.split('/').pop() : '小说') || '小说';
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = wsName + '.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const msg = '已导出 ' + parts.length + ' 章' + (skipped.length ? '，跳过 ' + skipped.length + ' 章（' + skipped.join('、') + '）' : '');
+  toast(msg, skipped.length ? 3200 : 2200);
+}
+
+/* ================================================================ 抽屉 */
+let curChapter = null;                       // 当前编辑 {nodeId, file, content, hash, dirty}
+let curTab = 'edit';                         // 保留变量但分栏模式下正文+AI 常显
+$('#dclose').onclick = closeDrawer;
+function switchTab(t){
+  curTab = t;
+  renderAI();                                // 分栏：AI 常显，打开抽屉即加载
+}
+function openDrawer(nodeId){
+  const n = nodeById(nodeId); if (!n) return;
+  selectNode(nodeId);
+  curChapter = { nodeId, file: n.file, content: null, hash: '', dirty: false };
+  $('#dtitle').value = n.title;
+  $('#dfile').textContent = n.file;
+  setDrawerStatus('');
+  drawer.classList.add('show');
+  loadChapter();
+  renderAI();                                // 分栏：正文与 AI 同时加载
+  setTimeout(() => editor.focus(), 250);
+}
+function closeDrawer(){
+  if (curChapter && curChapter.dirty && !confirm('有未保存的修改，确定关闭？')) return;
+  drawer.classList.remove('show');
+  curChapter = null;
+}
+/* 分栏分隔条拖拽：调整 AI 侧栏宽度 */
+(function(){
+  const bar = $('#splitBar'), wrap = $('#splitWrap'), paneAI = $('#paneAI');
+  let dragging = false;
+  bar.addEventListener('pointerdown', e => {
+    dragging = true; bar.classList.add('drag');
+    bar.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  bar.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const r = wrap.getBoundingClientRect();
+    const ratio = clamp(1 - (e.clientX - r.left) / r.width, 0.26, 0.72); // AI 宽度占比 26%~72%
+    paneAI.style.flex = '0 0 ' + (ratio * 100).toFixed(1) + '%';
+  });
+  const stop = e => { dragging = false; bar.classList.remove('drag'); };
+  bar.addEventListener('pointerup', stop);
+  bar.addEventListener('pointercancel', stop);
+})();
+/* 抽屉整体宽度：拖左边缘调整 */
+(function(){
+  const h = $('#dresize');
+  let dragging = false;
+  h.addEventListener('pointerdown', e => {
+    dragging = true; h.classList.add('drag');
+    h.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  h.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const w = clamp(innerWidth - e.clientX, 380, Math.min(1100, innerWidth - 60));
+    drawer.style.width = w + 'px';
+  });
+  const stop = () => { dragging = false; h.classList.remove('drag'); };
+  h.addEventListener('pointerup', stop);
+  h.addEventListener('pointercancel', stop);
+})();
+async function loadChapter(){
+  try {
+    const r = await api.get('/api/file?p=' + encodeURIComponent(curChapter.file));
+    curChapter.content = r.content; curChapter.hash = r.hash; curChapter.dirty = false;
+    editor.value = r.content;
+    setDrawerStatus('已载入');
+    const n = nodeById(curChapter.nodeId);
+    if (n && !n.sub){
+      const line = r.content.split('\n').map(s => s.trim()).find(s => s && !s.startsWith('#'));
+      if (line){ n.sub = line.slice(0, 60); updateNodeEl(n); scheduleSave(); }
+    }
+  } catch (e) {
+    editor.value = ''; curChapter.content = '';
+    setDrawerStatus('读取失败', 'dirty');
+  }
+}
+function setDrawerStatus(txt, cls){ const el = $('#dstatus'); el.textContent = txt; el.className = cls || ''; }
+editor.addEventListener('input', () => {
+  if (!curChapter) return;
+  curChapter.dirty = true; curChapter.content = editor.value;
+  setDrawerStatus('未保存', 'dirty');
+});
+async function saveChapter(){
+  if (!curChapter || !curChapter.dirty) return;
+  setDrawerStatus('保存中…');
+  try {
+    const r = await api.send('/api/file', 'PUT', { p: curChapter.file, content: curChapter.content, baseHash: curChapter.hash });
+    curChapter.hash = r.hash; curChapter.dirty = false;
+    setDrawerStatus('已保存', 'saved');
+  } catch (e) {
+    if (e.__status === 409){
+      setDrawerStatus('文件已被外部修改', 'dirty');
+      toast('文件在别处被改过，可先复制正文再点「重新载入」');
+      if (e.hash) curChapter.remoteHash = e.hash;
+    } else { setDrawerStatus('保存失败', 'dirty'); toast('保存失败：' + (e.error || '')); }
+  }
+}
+$('#dtitle').addEventListener('input', () => {
+  if (!curChapter) return;
+  const n = nodeById(curChapter.nodeId);
+  if (n){ n.title = $('#dtitle').value; renderNodes(); scheduleSave(); }
+});
+
+/* ================================================================ AI 参谋 */
+let aiConfigured = null, aiLoadedChapter = null;
+const aiMsgs = $('#aiMsgs');
+let aiSession = [];                          // 本地渲染用（真相在服务端）
+function renderAI(){
+  if (aiLoadedChapter === curChapter?.file) { paintAI(); refreshUsage(); return; }
+  aiLoadedChapter = curChapter?.file;
+  aiSession = (curChapter ? (LS.get(SESS_KEY(currentWs), { sharedSummary:'', sessions:{} }).sessions[curChapter.file] || []).slice(-40) : []);
+  paintAI();
+  refreshUsage();
+  const cfg = getAiCfg();
+  aiConfigured = !!(cfg && cfg.apiKey && cfg.model);
+  window.__aiShared = LS.get(SESS_KEY(currentWs), { sharedSummary:'', sessions:{} }).sharedSummary || '';
+  if (!aiConfigured) showAICfg();
+}
+function paintAI(){
+  aiMsgs.textContent = '';
+  if (window.__aiShared){
+    const d = document.createElement('details');
+    d.id = 'summaryBox';
+    d.innerHTML = '<summary>跨章共享摘要（所有章节参谋共用）</summary><div class="stext"></div>';
+    d.querySelector('.stext').textContent = window.__aiShared;
+    aiMsgs.appendChild(d);
+  }
+  if (!aiSession.length && aiConfigured !== false){
+    const e = document.createElement('div');
+    e.className = 'msg ai';
+    e.textContent = '这一章想聊什么？节奏、伏笔、人物动机都可以问。';
+    aiMsgs.appendChild(e);
+  }
+  for (const m of aiSession){
+    const d = document.createElement('div');
+    d.className = 'msg ' + (m.role === 'user' ? 'me' : 'ai');
+    d.textContent = m.content;
+    aiMsgs.appendChild(d);
+  }
+  aiMsgs.scrollTop = aiMsgs.scrollHeight;
+}
+function showAICfg(){
+  aiMsgs.textContent = '';
+  const box = document.createElement('div');
+  box.id = 'aiCfg';
+  box.innerHTML = `<p>还没有配置 AI。只需填入你的 API Key，点「获取模型」自动识别可用模型并选择即可。</p>
+    <label>API Key</label><input id="cfgKey" type="password" placeholder="sk-...">
+    <div class="cfg-adv">高级设置（Base URL / 手动模型）▾</div>
+    <div class="cfg-adv-body">
+      <label>Base URL</label><input id="cfgUrl" placeholder="https://api.openai.com/v1">
+    </div>
+    <div class="cfg-row"><button class="pbtn" id="cfgFetch">获取模型</button></div>
+    <label>模型</label><select id="cfgModelSel"><option value="">— 请先获取模型 —</option></select>
+    <input id="cfgModelManual" placeholder="或手动输入模型名（如 deepseek-chat）">
+    <div class="cfg-err" id="cfgErr"></div>
+    <button class="pbtn primary" id="cfgSave">保存并启用</button>`;
+  aiMsgs.appendChild(box);
+  const adv = box.querySelector('.cfg-adv');
+  adv.onclick = () => box.querySelector('.cfg-adv-body').classList.toggle('show');
+  const err = box.querySelector('#cfgErr');
+  const showErr = (t) => { err.textContent = t; err.style.display = t ? 'block' : 'none'; };
+  const key = () => box.querySelector('#cfgKey').value.trim();
+  const url = () => (box.querySelector('#cfgUrl').value.trim() || 'https://api.openai.com/v1');
+  const model = () => box.querySelector('#cfgModelSel').value.trim() || box.querySelector('#cfgModelManual').value.trim();
+
+  // 获取模型：前端直连上游 /models
+  box.querySelector('#cfgFetch').onclick = async () => {
+    if (!key()) { showErr('请先填写 API Key'); return; }
+    const btn = box.querySelector('#cfgFetch'); btn.disabled = true; btn.textContent = '获取中…';
+    showErr('');
+    try {
+      const base = url().replace(/\/+$/, '');
+      const res = await fetch(base + '/models', { headers: { Authorization: 'Bearer ' + key() } });
+      const j = await res.json().catch(() => ({}));
+      const sel = box.querySelector('#cfgModelSel');
+      if (!res.ok){ showErr((j.error?.message || ('HTTP ' + res.status)) + '（可在下方手动输入模型名）'); return; }
+      const ids = (j.data || []).map(m => m.id).filter(Boolean);
+      if (!ids.length){ showErr('未获取到模型，请手动输入模型名'); return; }
+      sel.innerHTML = ids.map(m => `<option value="${m}">${m}</option>`).join('');
+      box.querySelector('#cfgModelManual').value = '';
+      toast('已获取 ' + ids.length + ' 个模型');
+    } catch (e) { showErr('获取失败：' + (e.message || e)); }
+    finally { btn.disabled = false; btn.textContent = '获取模型'; }
+  };
+
+  box.querySelector('#cfgSave').onclick = async () => {
+    const k = key(), u = url(), m = model();
+    if (!k){ showErr('请填写 API Key'); return; }
+    if (!m){ showErr('请选择或输入模型'); return; }
+    try {
+      setAiCfg({ baseUrl: u, apiKey: k, model: m });
+      aiConfigured = true; aiLoadedChapter = null;
+      toast('AI 已启用（Key 仅保存在本浏览器）');
+      renderAI();
+    } catch (e) { showErr('保存失败：' + (e.message || '')); }
+  };
+}
+const aiInput = $('#aiInput');
+/* Token 用量展示 */
+function fmtTokens(v){ return v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(1)+'k' : String(v); }
+function refreshUsage(){
+  const bar = $('#usageBar'); if (!bar) return;
+  if (!curChapter){ bar.textContent = ''; return; }
+  api.get('/api/ai/usage?chapter=' + encodeURIComponent(curChapter.file))
+    .then(u => {
+      const c = u.chapter || {}, t = u.total || {}, d = u.today || {};
+      bar.innerHTML = `<span>本章 <b>${fmtTokens(c.total || 0)}</b></span>
+        <span>今日 <b>${fmtTokens(d.total || 0)}</b></span>
+        <span>累计 <b>${fmtTokens(t.total || 0)}</b> tokens</span>`;
+    }).catch(() => { bar.textContent = ''; });
+}
+function aiSendNow(){
+  const text = aiInput.value.trim();
+  if (!text || !curChapter) return;
+  if (aiConfigured === false){ showAICfg(); return; }
+  aiSession.push({ role: 'user', content: text });
+  aiInput.value = ''; aiInput.style.height = 'auto';
+  paintAI();
+  const wait = document.createElement('div');
+  wait.className = 'msg ai'; wait.textContent = '…';
+  aiMsgs.appendChild(wait); aiMsgs.scrollTop = aiMsgs.scrollHeight;
+  $('#aiSend').disabled = true;
+  // 前端直连 OpenAI 兼容接口
+  (async () => {
+    const cfg = getAiCfg();
+    if (!cfg || !cfg.apiKey || !cfg.model) throw { error: '未配置 AI' };
+    const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const shared = window.__aiShared || '';
+    const system = [
+      '你是网文创作参谋，与作者围绕某一章展开讨论。',
+      '回答用简体中文，简洁、具体、可直接执行，不要空话。',
+      '除本章外，以下摘要汇总了作者在其他章节会话里讨论过的要点，供跨章参考：',
+      shared ? shared.slice(0, 4000) : '（暂无）',
+      `当前讨论章节：${curChapter.file}`,
+    ].join('\n');
+    const chapterExcerpt = (curChapter.content || '').slice(0, 3000);
+    const messages = [
+      { role: 'system', content: system },
+      ...(chapterExcerpt ? [{ role: 'system', content: '本章正文节选：\n' + chapterExcerpt }] : []),
+      ...aiSession.slice(-60),
+    ];
+    const res = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.apiKey },
+      body: JSON.stringify({ model: cfg.model, messages }),
+    });
+    const j = await res.json().catch(() => ({}));
+    const reply = j?.choices?.[0]?.message?.content;
+    if (!res.ok || !reply) throw { error: j?.error?.message || ('HTTP ' + res.status + ' 无返回') };
+    // 记录用量（若上游返回 usage）
+    if (j.usage){ addUsage(curChapter.file, j.usage.prompt_tokens || 0, j.usage.completion_tokens || 0); }
+    // 保存会话
+    aiSession.push({ role: 'assistant', content: reply });
+    const sess = LS.get(SESS_KEY(currentWs), { sharedSummary:'', sessions:{} });
+    sess.sessions[curChapter.file] = aiSession.slice(-60);
+    LS.set(SESS_KEY(currentWs), sess);
+    paintAI();
+    refreshUsage();
+    // 异步刷新共享摘要（best-effort，失败不阻塞）
+    refreshSharedSummaryLocal(curChapter.file);
+  })()
+    .catch(e => {
+      wait.className = 'msg err';
+      wait.textContent = e.error || e.message || '请求失败';
+      aiSession.pop(); // 回滚用户消息
+    })
+    .finally(() => { $('#aiSend').disabled = false; });
+}
+/* 跨章共享摘要：本地用最近若干章会话要点拼一份（无服务端 LLM 摘要，轻量替代） */
+async function refreshSharedSummaryLocal(chapterFile){
+  try {
+    const cfg = getAiCfg();
+    if (!cfg || !cfg.apiKey || !cfg.model) return;
+    const sess = LS.get(SESS_KEY(currentWs), { sharedSummary:'', sessions:{} });
+    const recent = Object.entries(sess.sessions).slice(-6)
+      .map(([k, msgs]) => '【' + k + '】' + msgs.slice(-2).map(m => m.role + ': ' + m.content.slice(0, 120)).join(' | '))
+      .join('\n');
+    if (!recent) return;
+    const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const res = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.apiKey },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [
+          { role: 'system', content: '你是摘要器。把作者与参谋在多章会话里的讨论要点压缩成一份要点式摘要（每行一条，不超过 30 行，中文）。只输出摘要本身。' },
+          { role: 'user', content: '旧摘要：\n' + (sess.sharedSummary || '（无）') + '\n\n最近对话：\n' + recent.slice(0, 6000) },
+        ],
+        max_tokens: 600,
+      }),
+    });
+    const j = await res.json().catch(() => ({}));
+    const txt = j?.choices?.[0]?.message?.content?.trim();
+    if (txt){ sess.sharedSummary = txt; LS.set(SESS_KEY(currentWs), sess); window.__aiShared = txt; paintAI(); }
+  } catch (e) { /* best-effort */ }
+}
+$('#aiSend').onclick = aiSendNow;
+$$('#aiQuick button').forEach(b => b.addEventListener('click', () => {
+  aiInput.value = b.dataset.q;
+  aiSendNow();
+}));
+aiInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); aiSendNow(); }
+});
+aiInput.addEventListener('input', () => {
+  aiInput.style.height = 'auto';
+  aiInput.style.height = Math.min(120, aiInput.scrollHeight) + 'px';
+});
+
+/* ================================================================ 快捷键 */
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){
+    e.preventDefault();
+    if (drawer.classList.contains('show') && curChapter) saveChapter();
+    else saveStateNow();
+    return;
+  }
+  if (e.key === 'Escape'){
+    if (pendingFrom){ highlightPort(pendingFrom.node, pendingFrom.portId, false); pendingFrom = null; }
+    if ($('#modal').classList.contains('show')) $('#modal').classList.remove('show');
+    else if (mode) setMode(null);
+    else if (drawer.classList.contains('show')) closeDrawer();
+    else { $$('.panel').forEach(x => x.classList.remove('show')); selectNode(null); }
+    return;
+  }
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selNode){
+    state.nodes = state.nodes.filter(n => n.id !== selNode);
+    state.connections = state.connections.filter(c => c.from.node !== selNode && c.to.node !== selNode);
+    selNode = null; renderNodes(); scheduleSave(); toast('已删除卡片');
+  }
+});
+addEventListener('beforeunload', e => {
+  if (curChapter?.dirty || saveState.classList.contains('dirty')) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ================================================================ 启动 */
+async function boot(){
+  applyAppearance();
+  bindAppearance();
+  resizeBG();
+  try {
+    const r = await api.get('/api/state');
+    stateHash = r.hash;
+    const s = r.state || {};
+    state.nodes = Array.isArray(s.nodes) ? s.nodes : [];
+    state.connections = Array.isArray(s.connections) ? s.connections.filter(c => c.from && c.to) : [];
+    for (const n of state.nodes) ensurePorts(n);
+    migrateConnectionEndpoints();
+    if (s.appearance) app = { ...APP_DEFAULT, ...s.appearance };
+    applyAppearance();
+    renderNodes();
+    if (s.viewport && Number.isFinite(s.viewport.s)) { view = s.viewport; applyView(); }
+    else fitView();
+    if (location.search.includes('fx')){     // 演示模式：强制鲨鱼满浓度，且不写回任何状态
+      window.__noSave = true;
+      app.shark = true; app.sharkAlpha = 1;
+      applyAppearance();
+    }
+  } catch (e) { fitView(); toast('读取看板状态失败'); }
+  initWsbar();
+  if (!state.nodes.length) setTimeout(() => { openPanel('libPanel'); loadFiles(); }, 400);
+  /* 工具箱默认停靠右上角下方 */
+  toolbox.style.top = '58px'; toolbox.style.right = '12px';
+  syncToolbox();
+  bindExportDnD();
+  window.__ready = true;
+  /* 测试/调试句柄（供 CDP 实测使用） */
+  window.__dbg = {
+    get state(){ return state; },
+    get mode(){ return mode; },
+    get vS(){ return () => view.s; },
+    get vX(){ return () => view.x; },
+    get vY(){ return () => view.y; },
+    get view(){ return view; },
+    nodeById, portPoint, connectClickPort, setMode,
+    openDrawer, closeDrawer, renderNodes, updateNodeEl, applyView,
+    uid, deleteNode, switchWs, refreshWsTree,
+    computeWireOrder, getChapterOrder, renderExportList, doExport, stripFileTitle,
+  };
+}
+addEventListener('resize', () => { resizeBG(); drawBG(performance.now()); });
+window.__bgDebug = () => ({ view: { ...view }, dots: app.dots, bg: app.shark, alpha: app.sharkAlpha });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) drawBG(performance.now()); });
+requestAnimationFrame(bgLoop);
+boot();
+})();
+</script>
+</body>
+</html>

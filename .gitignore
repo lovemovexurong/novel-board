@@ -19,3 +19,6 @@ board/_shot/
 *.tmp-*
 .DS_Store
 Thumbs.db
+
+# WorkBuddy 云服务应用标记（本地追踪，不入库）
+.wbapp_*.genie

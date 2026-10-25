@@ -54,8 +54,40 @@
   #modeHint.show{display:block}
   #modeHint b{font-weight:700}
 
+  /* ---------- 工作区侧栏 ---------- */
+  #wsbar{position:fixed; left:0; top:48px; bottom:0; width:224px; z-index:28; background:var(--panel);
+         border-right:1px solid var(--line); display:flex; flex-direction:column; transform:translateX(0);
+         transition:transform .18s ease}
+  #wsbar.hide{transform:translateX(-100%)}
+  #wsHead{display:flex; align-items:center; gap:6px; padding:10px 12px 8px; border-bottom:1px solid var(--line)}
+  #wsHead .t{font-size:12px; color:var(--sub); flex:1; letter-spacing:.03em}
+  .wsbtn{width:26px; height:26px; border:1px solid var(--line); border-radius:7px; background:var(--panel);
+         color:var(--ink); font-size:14px; cursor:pointer; line-height:1; padding:0}
+  .wsbtn:hover{border-color:var(--accent); color:var(--accent)}
+  #wsTree{flex:1; overflow:auto; padding:6px 6px 10px}
+  .ws-node{display:flex; align-items:center; gap:5px; padding:7px 8px; border-radius:8px; cursor:pointer;
+           font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden}
+  .ws-node:hover{background:var(--accent-soft)}
+  .ws-node.on{background:var(--accent); color:var(--accent-ink)}
+  .ws-node .caret{width:14px; height:14px; flex:none; display:inline-flex; align-items:center; justify-content:center;
+                  font-size:10px; color:var(--sub); transition:transform .15s; border-radius:3px}
+  .ws-node .caret:hover{background:var(--accent-soft)}
+  .ws-node.on .caret{color:var(--accent-ink)}
+  .ws-node .caret.open{transform:rotate(90deg)}
+  .ws-node .caret.leaf{visibility:hidden}
+  .ws-node .wname{flex:1; overflow:hidden; text-overflow:ellipsis}
+  .ws-node .wop{width:18px; height:18px; flex:none; display:none; align-items:center; justify-content:center;
+               font-size:12px; border-radius:5px; color:var(--sub); border:1px solid transparent}
+  .ws-node:hover .wop{display:inline-flex}
+  .ws-node .wop:hover{border-color:var(--accent); color:var(--accent)}
+  .ws-node.on .wop{color:var(--accent-ink)}
+  .ws-node.on .wop:hover{border-color:var(--accent-ink); color:var(--accent-ink)}
+  .ws-children{margin-left:0}
+  .ws-children .ws-node{padding-left:18px}
+
   /* ---------- 舞台 ---------- */
   #stage{position:fixed; inset:0; top:48px; z-index:5; touch-action:none; cursor:grab}
+  #stage.with-ws{left:224px}
   #stage.panning{cursor:grabbing}
   #stage.placing{cursor:crosshair}
   #stage.connecting{cursor:crosshair}
@@ -93,6 +125,10 @@
   /* 加端口模式：边缘悬停高亮 */
   .stage.porting .node{cursor:crosshair}
   .stage.porting .node::after{content:""; position:absolute; inset:-3px; border:1.5px dashed var(--accent); border-radius:inherit; pointer-events:none}
+  /* 删除模式：卡片悬停标红提示 */
+  .stage.deleting .node{cursor:pointer}
+  .stage.deleting .node::after{content:""; position:absolute; inset:-3px; border:1.5px dashed var(--danger); border-radius:inherit; pointer-events:none}
+  .stage.deleting .node:hover{border-color:var(--danger); background:var(--accent-soft)}
 
   /* ---------- 线 ---------- */
   .wire{fill:none; stroke:var(--line2); stroke-width:2}
@@ -167,6 +203,19 @@
   #fileList .empty{color:var(--sub); cursor:default; font-size:12.5px}
   #fileList .empty:hover{background:transparent}
 
+  /* 导出面板 */
+  #exportPanel{width:320px}
+  #exportHint{font-size:12px; color:var(--sub); margin:0 0 10px; line-height:1.5}
+  #exportList{margin:0; padding:0; list-style:none; max-height:46vh; overflow:auto}
+  #exportList li{display:flex; align-items:center; gap:8px; padding:8px 6px; margin:3px 0;
+                 border:1px solid var(--line); border-radius:8px; background:var(--panel2);
+                 cursor:grab; font-size:13px; user-select:none}
+  #exportList li.dragging{opacity:.45; border-style:dashed}
+  #exportList li.drag-over{border-color:var(--accent)}
+  #exportList .eidx{flex:none; width:22px; text-align:right; color:var(--sub); font-size:11px}
+  #exportList .ename{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #exportList .efile{flex:none; font-size:10.5px; color:var(--sub); opacity:.7; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
   /* ---------- 抽屉 ---------- */
   #drawer{position:fixed; z-index:50; top:0; right:0; bottom:0; width:min(540px,100%);
           background:var(--panel); border-left:1px solid var(--line); box-shadow:var(--shadow);
@@ -227,6 +276,22 @@
   #aiQuick button{border:1px solid var(--line); border-radius:999px; background:var(--panel2); color:var(--sub);
                   font-size:12px; padding:5px 12px; cursor:pointer}
   #aiQuick button:hover{color:var(--accent); border-color:var(--accent)}
+  /* AI Token 用量 */
+  #usageBar{padding:6px 14px 4px; border-top:1px solid var(--line); font-size:11.5px; color:var(--sub);
+           display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; line-height:1.5}
+  #usageBar b{color:var(--ink); font-weight:600}
+  #usageBar .u-ok{color:var(--ok)}
+  /* AI 简化配置（Key + 获取模型） */
+  #aiCfg .cfg-hint{font-size:12px; color:var(--sub); margin:0 0 4px}
+  #aiCfg .cfg-adv{margin:2px 0 0; font-size:12px; color:var(--sub); cursor:pointer; user-select:none}
+  #aiCfg .cfg-adv:hover{color:var(--accent)}
+  #aiCfg .cfg-adv-body{display:none; margin-top:6px}
+  #aiCfg .cfg-adv-body.show{display:block}
+  #aiCfg select{width:100%; height:32px; margin:3px 0 9px; border:1px solid var(--line); border-radius:8px;
+                 background:var(--panel); color:var(--ink); padding:0 10px; font-size:13px; outline:none}
+  #aiCfg .cfg-row{display:flex; gap:8px}
+  #aiCfg .cfg-row .pbtn{flex:none; width:auto; padding:0 14px; margin:3px 0 9px}
+  #aiCfg .cfg-err{font-size:12px; color:var(--danger); margin:0 0 8px; display:none}
 
   /* ---------- 弹窗 ---------- */
   #modal{position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:none;
@@ -267,15 +332,27 @@
 
 <div id="topbar">
   <div id="brand">小说<em>看板</em></div>
+  <button class="tbtn" id="wsToggle" title="显示/隐藏工作区树">☰<span>工作区</span></button>
   <button class="tbtn" id="newBtn" title="新建章节并放到看板上">✚<span>新章节</span></button>
-  <button class="tbtn" id="libBtn" title="章节库：选择文件上板">☰<span>章节</span></button>
+  <button class="tbtn" id="libBtn" title="章节库：选择文件上板">▤<span>章节</span></button>
   <button class="tbtn" id="cutBtn" title="断线模式：点连线即断开">✂<span>断线</span></button>
   <button class="tbtn" id="styleBtn" title="外观设置">◐<span>外观</span></button>
+  <button class="tbtn" id="exportBtn" title="导出整本小说为 txt">⇩<span>导出</span></button>
   <button class="tbtn" id="themeBtn" title="深浅主题">◑</button>
   <div id="saveState">—</div>
 </div>
 
 <div id="modeHint"></div>
+
+<!-- 工作区侧栏 -->
+<div id="wsbar" class="hide">
+  <div id="wsHead">
+    <span class="t">工作区</span>
+    <button class="wsbtn" id="wsAdd" title="新建小说工作区">✚</button>
+    <button class="wsbtn" id="wsToggle2" title="收起">◀</button>
+  </div>
+  <div id="wsTree"></div>
+</div>
 
 <!-- 悬浮工具箱 -->
 <div id="toolbox">
@@ -285,6 +362,7 @@
     <button class="ttool" data-tool="connect"><span class="ic">⇄</span><span class="lb">连线（拖端口）</span></button>
     <button class="ttool" data-tool="port"><span class="ic">⊕</span><span class="lb">加连接点</span></button>
     <button class="ttool" data-tool="cut"><span class="ic">✂</span><span class="lb">删线（点线断开）</span></button>
+    <button class="ttool" data-tool="del"><span class="ic">🗑</span><span class="lb">删除卡片</span></button>
     <button class="ttool" data-tool="add"><span class="ic">✚</span><span class="lb">新章节</span></button>
   </div>
 </div>
@@ -325,6 +403,16 @@
   <button class="pbtn" id="refreshLibBtn">刷新</button>
 </div>
 
+<!-- 导出面板 -->
+<div class="panel" id="exportPanel">
+  <h3>导出整本小说 <button class="x" data-close="exportPanel">✕</button></h3>
+  <p id="exportHint">拖拽下方章节调整导出顺序（默认按连线顺序）</p>
+  <ul id="exportList"></ul>
+  <div class="divider"></div>
+  <button class="pbtn" id="exportResetBtn">恢复连线顺序</button>
+  <button class="pbtn primary" id="exportDoBtn">导出为 .txt</button>
+</div>
+
 <!-- 抽屉：正文 / AI -->
 <aside id="drawer">
   <div id="dresize" title="拖动调整侧栏宽度"></div>
@@ -349,6 +437,7 @@
             <button data-q="针对本章给出 3 到 5 条最重要的修改建议，按优先级排序，并说明为什么这样改。">修改建议</button>
             <button data-q="基于本章正文和跨章共享摘要，建议接下来两章的剧情走向、冲突升级点与伏笔安排。">后续走向</button>
           </div>
+          <div id="usageBar" title="Token 用量统计"></div>
           <div id="aiFoot">
             <textarea id="aiInput" rows="1" placeholder="问点什么…（Ctrl+Enter 发送）"></textarea>
             <button id="aiSend">发送</button>
@@ -383,10 +472,13 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 /* ================================================================ API */
+let currentWs = '';                        // 当前工作区 id（'' = 默认根看板）
+const wsParam = () => currentWs ? '?ws=' + encodeURIComponent(currentWs) : '';
 const api = {
-  async get(u){ const r = await fetch(u); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+  async get(u){ const r = await fetch(u + (u.includes('?') ? '&' : '?') + (currentWs ? 'ws=' + encodeURIComponent(currentWs) : '') ); if (!r.ok) throw new Error(await r.text()); return r.json(); },
   async send(u, method, body){
-    const r = await fetch(u, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const url = u + (u.includes('?') ? '&' : '?') + (currentWs ? 'ws=' + encodeURIComponent(currentWs) : '');
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { j.__status = r.status; throw j; }
     return j;
@@ -398,7 +490,7 @@ let state = { version: 1, nodes: [], connections: [], appearance: {}, viewport: 
 let stateHash = '';
 let view = { x: 0, y: 0, s: 1 };          // 世界变换
 let selNode = null;                        // 选中的节点 id
-let mode = null;                           // null | 'placing' | 'placing-file' | 'cut'
+let mode = null;                           // null | 'placing' | 'placing-file' | 'cut' | 'del'
 let placingFile = null;                    // 放置模式的文件名
 let saveTimer = null, saveState = $('#saveState');
 const editor = $('#editor'), drawer = $('#drawer');
@@ -839,6 +931,8 @@ stage.addEventListener('pointerdown', e => {
   }
   if (nodeEl){
     const n = nodeById(nodeEl.dataset.id);
+    // 删除模式：点卡片即删
+    if (mode === 'del'){ e.stopPropagation(); deleteNode(n.id); return; }
     selectNode(n.id);
     const p = toWorld(e.clientX, e.clientY);
     drag = { kind: 'node', n, dx: p.x - n.x, dy: p.y - n.y, sx0: e.clientX, sy0: e.clientY, moved: false };
@@ -1133,6 +1227,7 @@ function setMode(m, hintHtml){
   stage.classList.toggle('placing', m === 'placing' || m === 'placing-file');
   stage.classList.toggle('connecting-mode', m === 'connect');
   stage.classList.toggle('porting', m === 'port');
+  stage.classList.toggle('deleting', m === 'del');
   syncToolbox();
   if (m){ modeHint.innerHTML = hintHtml; modeHint.classList.add('show'); }
   else { modeHint.classList.remove('show'); }
@@ -1145,6 +1240,9 @@ $('#newBtn').onclick = () => {
 };
 $('#styleBtn').onclick = () => openPanel('stylePanel');
 $('#libBtn').onclick = () => { openPanel('libPanel'); loadFiles(); };
+$('#exportBtn').onclick = () => { openPanel('exportPanel'); renderExportList(); };
+$('#exportDoBtn').onclick = doExport;
+$('#exportResetBtn').onclick = () => { delete state.order; renderExportList(); scheduleSave(); toast('已恢复连线顺序'); };
 $$('.x[data-close]').forEach(b => b.onclick = () => $('#' + b.dataset.close).classList.remove('show'));
 function openPanel(id){
   const p = $('#' + id), was = p.classList.contains('show');
@@ -1160,6 +1258,7 @@ function syncToolbox(){
     const t = b.dataset.tool;
     const on = (t === 'select' && !mode) || (t === 'cut' && mode === 'cut') ||
                (t === 'connect' && mode === 'connect') || (t === 'port' && mode === 'port') ||
+               (t === 'del' && mode === 'del') ||
                (t === 'add' && (mode === 'placing' || mode === 'placing-file'));
     b.classList.toggle('on', on);
   });
@@ -1192,6 +1291,7 @@ $$('#toolbox .ttool').forEach(b => b.addEventListener('click', () => {
   pendingFrom = null;
   if (t === 'select'){ setMode(null); return; }
   if (t === 'cut'){ setMode(mode === 'cut' ? null : 'cut', '<b>删线</b> · 点击连线断开 · Esc 退出'); return; }
+  if (t === 'del'){ setMode(mode === 'del' ? null : 'del', '<b>删除卡片</b> · 点击卡片删除（可选同时删章节文件）· Esc 退出'); return; }
   if (t === 'add'){ setMode(mode === 'placing' ? null : 'placing', '<b>新章节</b> · 点击空白处放置 · Esc 取消'); return; }
   if (t === 'connect'){ setMode(mode === 'connect' ? null : 'connect', '<b>连线</b> · 依次点击两个端口（起点→终点）· Esc 退出'); return; }
   if (t === 'port'){ setMode(mode === 'port' ? null : 'port', '<b>加连接点</b> · 点击卡片边缘要加点的位置 · Esc 退出'); return; }
@@ -1221,7 +1321,125 @@ function highlightPort(nodeId, pid, on){
   if (dot) dot.classList.toggle('port-sel', on);
 }
 
-/* ---- 章节库 ---- */
+/* ================================================================ 工作区树 */
+const wsbar = $('#wsbar'), wsTree = $('#wsTree');
+let wsTreeData = null;                       // 当前工作区树（根节点）
+let wsCollapsed = new Set();                 // 折叠的工作区 id
+function renderWsTree(){
+  wsTree.textContent = '';
+  const walk = (node, depth) => {
+    const row = document.createElement('div');
+    row.className = 'ws-node' + (currentWs === node.id ? ' on' : '');
+    const hasKids = node.children && node.children.length > 0;
+    const collapsed = wsCollapsed.has(node.id);
+    row.innerHTML = `<span class="caret ${hasKids ? (collapsed ? '' : 'open') : 'leaf'}">▶</span>
+      <span class="wname"></span><span class="wop" data-op="add">＋</span>
+      <span class="wop" data-op="rename">✎</span><span class="wop" data-op="del">✕</span>`;
+    row.querySelector('.wname').textContent = node.name;
+    row.querySelector('.wname').title = node.id || '默认看板';
+    row.addEventListener('click', e => {
+      if (e.target.classList.contains('wop')) return;
+      if (e.target.classList.contains('caret') && hasKids){ toggleWsCollapse(node.id); return; }
+      switchWs(node.id);
+    });
+    row.querySelector('[data-op=add]').addEventListener('click', e => { e.stopPropagation(); promptNewWs(node.id); });
+    row.querySelector('[data-op=rename]').addEventListener('click', e => { e.stopPropagation(); promptRenameWs(node.id); });
+    row.querySelector('[data-op=del]').addEventListener('click', e => { e.stopPropagation(); confirmDeleteWs(node.id); });
+    wsTree.appendChild(row);
+    if (hasKids && !collapsed){
+      const kidWrap = document.createElement('div');
+      kidWrap.className = 'ws-children';
+      for (const c of node.children) walk(c, depth + 1);
+      wsTree.appendChild(kidWrap);
+    }
+  };
+  walk(wsTreeData, 0);
+}
+function toggleWsCollapse(id){ wsCollapsed.has(id) ? wsCollapsed.delete(id) : wsCollapsed.add(id); renderWsTree(); }
+async function refreshWsTree(){
+  try { const r = await api.get('/api/ws/tree'); wsTreeData = r.tree; renderWsTree(); }
+  catch (e) { console.error('ws tree', e); }
+}
+/* 切换工作区：重载状态/章节 */
+let switchingWs = false;
+async function switchWs(ws){
+  if (switchingWs) return;
+  if (ws === currentWs){ return; }
+  // 有未保存改动先确认
+  if (curChapter && curChapter.dirty){ if (!confirm('当前章节有未保存修改，切换将丢弃，确定？')) return; }
+  if (saveState.classList.contains('dirty')){ await saveStateNow().catch(() => {}); }
+  switchingWs = true;
+  closeDrawer();
+  currentWs = ws;
+  selNode = null;
+  renderWsTree();
+  try {
+    const r = await api.get('/api/state');
+    stateHash = r.hash;
+    const s = r.state || {};
+    state.nodes = Array.isArray(s.nodes) ? s.nodes : [];
+    state.connections = Array.isArray(s.connections) ? s.connections.filter(c => c.from && c.to) : [];
+    for (const n of state.nodes) ensurePorts(n);
+    migrateConnectionEndpoints();
+    if (s.appearance) app = { ...APP_DEFAULT, ...s.appearance };
+    applyAppearance();
+    renderNodes();
+    if (s.viewport && Number.isFinite(s.viewport.s)) { view = s.viewport; applyView(); }
+    else fitView();
+    toast('已切换到：' + (ws || '默认看板'));
+  } catch (e) {
+    toast('切换失败：' + (e.message || e));
+  } finally {
+    switchingWs = false;
+    if (!state.nodes.length) setTimeout(() => { openPanel('libPanel'); loadFiles(); }, 200);
+  }
+}
+async function promptNewWs(parent){
+  const name = prompt('新工作区名称（作为子工作区挂在「' + (parent || '默认看板') + '」下）：');
+  if (!name || !name.trim()) return;
+  try {
+    const r = await api.send('/api/ws/create', 'POST', { parent, name: name.trim() });
+    await refreshWsTree();
+    toast('已创建工作区「' + r.name + '」');
+  } catch (e) { toast('创建失败：' + (e.error || '')); }
+}
+async function promptRenameWs(id){
+  if (!id){ toast('默认看板不可重命名'); return; }
+  const cur = id.split('/').pop();
+  const name = prompt('重命名工作区「' + cur + '」：', cur);
+  if (!name || !name.trim() || name.trim() === cur) return;
+  try {
+    const r = await api.send('/api/ws/rename', 'POST', { ws: id, name: name.trim() });
+    if (currentWs === id) currentWs = r.id;
+    await refreshWsTree();
+    toast('已重命名');
+  } catch (e) { toast('重命名失败：' + (e.error || '')); }
+}
+async function confirmDeleteWs(id){
+  if (!id){ toast('默认看板不可删除'); return; }
+  const name = id.split('/').pop();
+  if (!confirm('确定删除工作区「' + name + '」？\n其下所有子工作区、章节文件、看板状态都会被永久删除！')) return;
+  try {
+    await api.send('/api/ws/delete', 'POST', { ws: id });
+    if (currentWs === id || currentWs.startsWith(id + '/')) currentWs = '';
+    await refreshWsTree();
+    if (currentWs === '') switchWs('');
+    toast('已删除工作区');
+  } catch (e) { toast('删除失败：' + (e.error || '')); }
+}
+function initWsbar(){
+  $('#wsToggle').onclick = toggleWsbar;
+  $('#wsToggle2').onclick = toggleWsbar;
+  $('#wsAdd').onclick = () => promptNewWs(currentWs);
+  refreshWsTree();
+}
+function toggleWsbar(){
+  wsbar.classList.toggle('hide');
+  stage.classList.toggle('with-ws', !wsbar.classList.contains('hide'));
+  setTimeout(() => { resizeBG(); drawBG(performance.now()); }, 200);
+}
+
+/* ================================================================ 章节库 */
 async function loadFiles(){
   const ul = $('#fileList');
   ul.innerHTML = '<li class="empty">读取中…</li>';
@@ -1303,6 +1521,24 @@ function addNode(file, at, title){
   renderNodes(); selectNode(n.id);
   return n;
 }
+/* 删除卡片：清理连线，可选删章节文件 */
+async function deleteNode(nodeId, alsoFile){
+  const n = nodeById(nodeId);
+  if (!n) return;
+  if (alsoFile === undefined){
+    alsoFile = confirm('删除卡片「' + n.title + '」时，是否连同章节文件「' + n.file + '」一起删除？\n\n确定 = 连文件一起删；取消 = 只从看板移除卡片，保留文件。');
+  }
+  state.nodes = state.nodes.filter(x => x.id !== nodeId);
+  state.connections = state.connections.filter(c => c.from.node !== nodeId && c.to.node !== nodeId);
+  if (selNode === nodeId) selNode = null;
+  renderNodes(); scheduleSave();
+  if (alsoFile){
+    try { await api.send('/api/file/delete', 'POST', { p: n.file }); toast('已删除卡片与文件'); }
+    catch (e) { toast('卡片已移除，但文件删除失败：' + (e.error || '')); }
+  } else {
+    toast('已删除卡片（保留文件）');
+  }
+}
 function autoLayout(){
   const sorted = [...state.nodes].sort((a, b) => a.file.localeCompare(b.file, 'zh'));
   const perRow = Math.max(3, Math.ceil(Math.sqrt(sorted.length) * 1.6));
@@ -1312,6 +1548,121 @@ function autoLayout(){
     n.y = 100 + row * (app.nodeH + app.gapY);
   });
   renderNodes(); fitView(); toast('已自动排布');
+}
+
+/* ================================================================ 导出整本小说 */
+/* 章节排序：默认按连线流（from→to 拓扑），可手动拖拽覆盖，结果存 state.order */
+function computeWireOrder(){
+  const ids = state.nodes.map(n => n.id);
+  const indeg = {}; const adj = {}; const outdeg = {};
+  ids.forEach(id => { indeg[id] = 0; adj[id] = []; outdeg[id] = 0; });
+  for (const c of state.connections){
+    if (!ids.includes(c.from.node) || !ids.includes(c.to.node)) continue;
+    adj[c.from.node].push(c.to.node);
+    indeg[c.to.node]++; outdeg[c.from.node]++;
+  }
+  const order = [];
+  const q = ids.filter(id => indeg[id] === 0);
+  // 起点按画布位置（先上后下、先左后右）排序，保证多起点时稳定
+  q.sort((a, b) => { const A = nodeById(a), B = nodeById(b); return (A.y - B.y) || (A.x - B.x); });
+  const seen = new Set();
+  while (q.length){
+    const id = q.shift();
+    if (seen.has(id)) continue;
+    seen.add(id); order.push(id);
+    adj[id].sort((a, b) => { const A = nodeById(a), B = nodeById(b); return (A.y - B.y) || (A.x - B.x); });
+    for (const nx of adj[id]){ if (--indeg[nx] === 0) q.push(nx); }
+  }
+  // 环内/剩余节点（拓扑未覆盖的）按文件名序追加到末尾
+  const rest = ids.filter(id => !seen.has(id)).sort((a, b) => nodeById(a).file.localeCompare(nodeById(b).file, 'zh'));
+  return order.concat(rest);
+}
+function getChapterOrder(){
+  // 优先用 state.order（手动排序，仅保留仍存在的节点），否则按连线流
+  const alive = new Set(state.nodes.map(n => n.id));
+  if (Array.isArray(state.order)){
+    const kept = state.order.filter(id => alive.has(id));
+    const missing = state.nodes.filter(n => !kept.includes(n.id)).map(n => n.id);
+    return kept.concat(missing);
+  }
+  return computeWireOrder();
+}
+function renderExportList(){
+  const ul = $('#exportList');
+  const order = getChapterOrder();
+  ul.innerHTML = '';
+  order.forEach((id, i) => {
+    const n = nodeById(id); if (!n) return;
+    const li = document.createElement('li');
+    li.dataset.id = id; li.draggable = true;
+    li.innerHTML = `<span class="eidx">${i + 1}</span><span class="ename"></span><span class="efile"></span>`;
+    li.querySelector('.ename').textContent = n.title || n.file.replace(/\.(md|txt)$/i, '');
+    li.querySelector('.efile').textContent = n.file;
+    ul.appendChild(li);
+  });
+}
+function bindExportDnD(){
+  const ul = $('#exportList');
+  let dragEl = null;
+  ul.addEventListener('dragstart', e => {
+    const li = e.target.closest('li'); if (!li) return;
+    dragEl = li; li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', li.dataset.id); } catch {}
+  });
+  ul.addEventListener('dragend', () => { if (dragEl) dragEl.classList.remove('dragging'); dragEl = null; $$('#exportList li').forEach(x => x.classList.remove('drag-over')); });
+  ul.addEventListener('dragover', e => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const li = e.target.closest('li');
+    $$('#exportList li').forEach(x => x.classList.remove('drag-over'));
+    if (li && li !== dragEl) li.classList.add('drag-over');
+  });
+  ul.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('li');
+    const cur = [...$$('#exportList li')].map(x => x.dataset.id);
+    if (!dragEl || !target || target === dragEl) return;
+    const from = cur.indexOf(dragEl.dataset.id);
+    const to = cur.indexOf(target.dataset.id);
+    if (from < 0 || to < 0) return;
+    cur.splice(from, 1); cur.splice(to, 0, dragEl.dataset.id);
+    state.order = cur;                       // 手动排序持久化到看板状态
+    renderExportList(); scheduleSave();
+  });
+}
+function stripFileTitle(content){
+  // 剥离文件首行 # 标题（若有），并清理首尾空白与多余空行
+  let lines = content.replace(/\r\n?/g, '\n').split('\n');
+  if (lines[0] && /^\s*#\s+/.test(lines[0])) lines.shift();
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines.join('\n').trim() + '\n';
+}
+async function doExport(){
+  const order = getChapterOrder();
+  const nodes = order.map(id => nodeById(id)).filter(Boolean);
+  if (!nodes.length){ toast('当前看板没有章节可导出'); return; }
+  const parts = []; const skipped = [];
+  for (const n of nodes){
+    try {
+      const r = await api.get('/api/file?p=' + encodeURIComponent(n.file));
+      const body = stripFileTitle(String(r.content || ''));
+      if (!body.trim()){ skipped.push(n.title); continue; }
+      parts.push((n.title || n.file.replace(/\.(md|txt)$/i, '')) + '\n\n' + body.trim() + '\n');
+    } catch (e) { skipped.push(n.title + '（读取失败）'); }
+  }
+  if (!parts.length){ toast('没有可导出的正文内容'); return; }
+  const sep = '\n' + '　' + '—'.repeat(20) + '　' + '\n\n';
+  const text = parts.join(sep);
+  const wsName = (currentWs ? currentWs.split('/').pop() : '小说') || '小说';
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = wsName + '.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const msg = '已导出 ' + parts.length + ' 章' + (skipped.length ? '，跳过 ' + skipped.length + ' 章（' + skipped.join('、') + '）' : '');
+  toast(msg, skipped.length ? 3200 : 2200);
 }
 
 /* ================================================================ 抽屉 */
@@ -1422,10 +1773,11 @@ let aiConfigured = null, aiLoadedChapter = null;
 const aiMsgs = $('#aiMsgs');
 let aiSession = [];                          // 本地渲染用（真相在服务端）
 function renderAI(){
-  if (aiLoadedChapter === curChapter?.file) { paintAI(); return; }
+  if (aiLoadedChapter === curChapter?.file) { paintAI(); refreshUsage(); return; }
   aiLoadedChapter = curChapter?.file;
   aiSession = [];
   paintAI();
+  refreshUsage();
   api.get('/api/ai/status').then(s => {
     aiConfigured = s.configured;
     window.__aiShared = s.sharedSummary;
@@ -1459,26 +1811,70 @@ function showAICfg(){
   aiMsgs.textContent = '';
   const box = document.createElement('div');
   box.id = 'aiCfg';
-  box.innerHTML = `<p>还没有配置 AI。填写一次 OpenAI 兼容端点即可（保存在本地 .board-config.json）：</p>
-    <label>Base URL</label><input id="cfgUrl" placeholder="https://api.example.com/v1">
+  box.innerHTML = `<p>还没有配置 AI。只需填入你的 API Key，点「获取模型」自动识别可用模型并选择即可。</p>
     <label>API Key</label><input id="cfgKey" type="password" placeholder="sk-...">
-    <label>模型</label><input id="cfgModel" placeholder="gpt-4o-mini / deepseek-chat …">
+    <div class="cfg-adv">高级设置（Base URL / 手动模型）▾</div>
+    <div class="cfg-adv-body">
+      <label>Base URL</label><input id="cfgUrl" placeholder="https://api.openai.com/v1">
+    </div>
+    <div class="cfg-row"><button class="pbtn" id="cfgFetch">获取模型</button></div>
+    <label>模型</label><select id="cfgModelSel"><option value="">— 请先获取模型 —</option></select>
+    <input id="cfgModelManual" placeholder="或手动输入模型名（如 deepseek-chat）">
+    <div class="cfg-err" id="cfgErr"></div>
     <button class="pbtn primary" id="cfgSave">保存并启用</button>`;
   aiMsgs.appendChild(box);
-  box.querySelector('#cfgSave').onclick = async () => {
-    const baseUrl = box.querySelector('#cfgUrl').value.trim();
-    const apiKey = box.querySelector('#cfgKey').value.trim();
-    const model = box.querySelector('#cfgModel').value.trim();
-    if (!(baseUrl && apiKey && model)) { toast('三项都要填'); return; }
+  const adv = box.querySelector('.cfg-adv');
+  adv.onclick = () => box.querySelector('.cfg-adv-body').classList.toggle('show');
+  const err = box.querySelector('#cfgErr');
+  const showErr = (t) => { err.textContent = t; err.style.display = t ? 'block' : 'none'; };
+  const key = () => box.querySelector('#cfgKey').value.trim();
+  const url = () => (box.querySelector('#cfgUrl').value.trim() || 'https://api.openai.com/v1');
+  const model = () => box.querySelector('#cfgModelSel').value.trim() || box.querySelector('#cfgModelManual').value.trim();
+
+  // 获取模型：先临时写入 baseUrl + key 到服务端，再调 /api/ai/models
+  box.querySelector('#cfgFetch').onclick = async () => {
+    if (!key()) { showErr('请先填写 API Key'); return; }
+    const btn = box.querySelector('#cfgFetch'); btn.disabled = true; btn.textContent = '获取中…';
+    showErr('');
     try {
-      await api.send('/api/config', 'PUT', { ai: { baseUrl, apiKey, model } });
+      await api.send('/api/config', 'PUT', { ai: { baseUrl: url(), apiKey: key() } });
+      const r = await api.get('/api/ai/models');
+      const sel = box.querySelector('#cfgModelSel');
+      if (r.error){ showErr(r.error + '（可在下方手动输入模型名）'); return; }
+      if (!r.models || !r.models.length){ showErr('未获取到模型，请手动输入模型名'); return; }
+      sel.innerHTML = r.models.map(m => `<option value="${m}">${m}</option>`).join('');
+      box.querySelector('#cfgModelManual').value = '';
+      toast('已获取 ' + r.models.length + ' 个模型');
+    } catch (e) { showErr('获取失败：' + (e.error || e.message || e)); }
+    finally { btn.disabled = false; btn.textContent = '获取模型'; }
+  };
+
+  box.querySelector('#cfgSave').onclick = async () => {
+    const k = key(), u = url(), m = model();
+    if (!k){ showErr('请填写 API Key'); return; }
+    if (!m){ showErr('请选择或输入模型'); return; }
+    try {
+      await api.send('/api/config', 'PUT', { ai: { baseUrl: u, apiKey: k, model: m } });
       aiConfigured = true; aiLoadedChapter = null;
       toast('AI 已启用');
       renderAI();
-    } catch { toast('保存配置失败'); }
+    } catch (e) { showErr('保存失败：' + (e.error || '')); }
   };
 }
 const aiInput = $('#aiInput');
+/* Token 用量展示 */
+function fmtTokens(v){ return v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(1)+'k' : String(v); }
+function refreshUsage(){
+  const bar = $('#usageBar'); if (!bar) return;
+  if (!curChapter){ bar.textContent = ''; return; }
+  api.get('/api/ai/usage?chapter=' + encodeURIComponent(curChapter.file))
+    .then(u => {
+      const c = u.chapter || {}, t = u.total || {}, d = u.today || {};
+      bar.innerHTML = `<span>本章 <b>${fmtTokens(c.total || 0)}</b></span>
+        <span>今日 <b>${fmtTokens(d.total || 0)}</b></span>
+        <span>累计 <b>${fmtTokens(t.total || 0)}</b> tokens</span>`;
+    }).catch(() => { bar.textContent = ''; });
+}
 function aiSendNow(){
   const text = aiInput.value.trim();
   if (!text || !curChapter) return;
@@ -1495,6 +1891,7 @@ function aiSendNow(){
       aiSession.push({ role: 'assistant', content: r.reply });
       window.__aiShared = r.sharedSummary || window.__aiShared;
       paintAI();
+      refreshUsage();
     })
     .catch(e => {
       wait.className = 'msg err';
@@ -1568,10 +1965,12 @@ async function boot(){
       applyAppearance();
     }
   } catch (e) { fitView(); toast('读取看板状态失败'); }
+  initWsbar();
   if (!state.nodes.length) setTimeout(() => { openPanel('libPanel'); loadFiles(); }, 400);
   /* 工具箱默认停靠右上角下方 */
   toolbox.style.top = '58px'; toolbox.style.right = '12px';
   syncToolbox();
+  bindExportDnD();
   window.__ready = true;
   /* 测试/调试句柄（供 CDP 实测使用） */
   window.__dbg = {
@@ -1583,7 +1982,8 @@ async function boot(){
     get view(){ return view; },
     nodeById, portPoint, connectClickPort, setMode,
     openDrawer, closeDrawer, renderNodes, updateNodeEl, applyView,
-    uid,
+    uid, deleteNode, switchWs, refreshWsTree,
+    computeWireOrder, getChapterOrder, renderExportList, doExport, stripFileTitle,
   };
 }
 addEventListener('resize', () => { resizeBG(); drawBG(performance.now()); });
