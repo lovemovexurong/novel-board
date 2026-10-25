@@ -1,7 +1,7 @@
 {
   "name": "novel-board",
   "productName": "小说看板",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "小说结构看板 · 时间树 + 章节写作 + AI 参谋（Windows 桌面版）",
   "main": "electron/main.cjs",
   "private": true,
